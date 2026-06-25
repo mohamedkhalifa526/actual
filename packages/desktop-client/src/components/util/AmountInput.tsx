@@ -40,6 +40,7 @@ type AmountInputProps = {
   focused?: boolean;
   disabled?: boolean;
   autoDecimals?: boolean;
+  updateOnInput?: boolean;
 };
 
 export function AmountInput({
@@ -59,6 +60,7 @@ export function AmountInput({
   focused,
   disabled = false,
   autoDecimals = false,
+  updateOnInput = false,
 }: AmountInputProps) {
   const { t } = useTranslation();
   const format = useFormat();
@@ -80,10 +82,12 @@ export function AmountInput({
   );
 
   const [value, setValue] = useState(getDisplayValue(initialValue, false));
-  useEffect(
-    () => setValue(getDisplayValue(initialValue, isFocused)),
-    [initialValue, isFocused, getDisplayValue],
-  );
+  useEffect(() => {
+    if (updateOnInput && isFocused) {
+      return;
+    }
+    setValue(getDisplayValue(initialValue, isFocused));
+  }, [initialValue, isFocused, getDisplayValue, updateOnInput]);
 
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const innerRef = useRef<HTMLInputElement | null>(null);
@@ -142,6 +146,12 @@ export function AmountInput({
 
     setValue(newText || '');
     onChangeValue?.(newText);
+
+    if (updateOnInput && onUpdate) {
+      const signedValue =
+        symbol === '-' && newText ? symbol + newText : newText || '0';
+      onUpdate(format.fromEdit(signedValue, 0));
+    }
   }
 
   function fireUpdate(amount) {
@@ -232,7 +242,9 @@ export function AmountInput({
           fireUpdate(amount);
           onEnter?.(e, amount);
         }}
-        onChangeValue={onInputTextChange}
+        onInput={e => {
+          onInputTextChange(e.currentTarget.value);
+        }}
       />
     </View>
   );

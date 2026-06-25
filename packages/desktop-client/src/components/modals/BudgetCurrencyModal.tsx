@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import type { FormEvent } from 'react';
+import { useRef, useState } from 'react';
 import { Form } from 'react-aria-components';
 import { Trans, useTranslation } from 'react-i18next';
 
@@ -10,13 +9,16 @@ import { InlineField } from '@actual-app/components/inline-field';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
+import { getCurrency } from '@actual-app/core/shared/currencies';
 import {
   computeBudgetAmount,
   computeExchangeRateToMain,
+  formatExchangeRate,
   normalizeExchangeRate,
 } from '@actual-app/core/shared/currency-transfer';
 import type { IntegerAmount } from '@actual-app/core/shared/util';
 
+import { FinancialText } from '#components/FinancialText';
 import {
   Modal,
   ModalButtons,
@@ -35,8 +37,6 @@ type BudgetCurrencyModalProps = Extract<
   { name: 'budget-currency' }
 >['options'];
 
-type InputMode = 'amount' | 'rate';
-
 export function BudgetCurrencyModal({
   accountCurrency,
   mainCurrency,
@@ -49,7 +49,6 @@ export function BudgetCurrencyModal({
   const { t } = useTranslation();
   const format = useFormat();
   const [hideFraction] = useSyncedPref('hideFraction');
-  const [inputMode, setInputMode] = useState<InputMode>('amount');
   const sign = sourceAmount < 0 ? -1 : 1;
   const initialBudgetAmount =
     defaultBudgetAmount ??
@@ -66,33 +65,57 @@ export function BudgetCurrencyModal({
       ) ?? defaultRate,
   );
   const [error, setError] = useState<string | null>(null);
+  const editingFieldRef = useRef<'amount' | 'rate' | null>(null);
 
-  const computedFromRate = computeBudgetAmount(sourceAmount, rate);
+  const accountSymbol = getCurrency(accountCurrency).symbol;
+  const mainSymbol = getCurrency(mainCurrency).symbol;
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (inputMode === 'amount') {
-      if (!budgetAmount) {
-        setError(t('Enter the amount in your budget currency'));
-        return;
-      }
-      if (Math.sign(budgetAmount) !== sign) {
-        setError(
-          t('Budget amount must have the same sign as the transaction'),
-        );
-        return;
-      }
-      onSubmit(budgetAmount);
-      return;
+  const clearError = () => {
+    if (error) {
+      setError(null);
     }
+  };
 
+  const onBudgetAmountUpdate = (value: IntegerAmount) => {
+    setBudgetAmount(value);
+    if (editingFieldRef.current === 'amount') {
+      const nextRate = computeExchangeRateToMain(sourceAmount, value);
+      if (nextRate != null) {
+        const normalized = normalizeExchangeRate(nextRate);
+        if (normalized != null) {
+          setRate(normalized);
+        }
+      }
+    }
+    clearError();
+  };
+
+  const onRateUpdate = (value: number) => {
+    setRate(value);
+    if (editingFieldRef.current === 'rate') {
+      setBudgetAmount(computeBudgetAmount(sourceAmount, value));
+    }
+    clearError();
+  };
+
+  const trySubmit = (): boolean => {
+    if (!budgetAmount) {
+      setError(t('Enter the amount in your budget currency'));
+      return false;
+    }
+    if (Math.sign(budgetAmount) !== sign) {
+      setError(
+        t('Budget amount must have the same sign as the transaction'),
+      );
+      return false;
+    }
     if (rate <= 0) {
       setError(t('Exchange rate must be a positive number'));
-      return;
+      return false;
     }
 
-    onSubmit(computeBudgetAmount(sourceAmount, rate));
+    onSubmit(budgetAmount);
+    return true;
   };
 
   return (
@@ -110,103 +133,163 @@ export function BudgetCurrencyModal({
           />
           <Form
             onSubmit={event => {
-              handleSubmit(event);
-              state.close();
+              event.preventDefault();
+              if (trySubmit()) {
+                state.close();
+              }
             }}
           >
-            <Text style={{ marginBottom: 15, color: theme.pageTextSubdued }}>
+            <Text style={{ marginBottom: 16, color: theme.pageTextSubdued }}>
               <Trans>
-                This account uses {{ accountCurrency }}. Enter the equivalent in
-                your budget currency ({{ mainCurrency }}) so category totals are
-                accurate.
-              </Trans>
-            </Text>
-
-            <Text style={{ marginBottom: 10, color: theme.pageTextSubdued }}>
-              <Trans>
-                Account amount: {{ amount: format(sourceAmount, 'financial') }}{' '}
-                ({{ accountCurrency }})
+                Convert this transaction to your budget currency so category
+                totals stay accurate.
               </Trans>
             </Text>
 
             <View
               style={{
-                flexDirection: 'row',
-                gap: 8,
-                marginBottom: 15,
+                padding: 12,
+                marginBottom: 20,
+                borderRadius: 6,
+                backgroundColor: theme.tableRowBackgroundHover,
+                gap: 12,
               }}
             >
-              <Button
-                variant={inputMode === 'amount' ? 'primary' : 'normal'}
-                onPress={() => setInputMode('amount')}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                }}
               >
-                <Trans>Budget amount</Trans>
-              </Button>
-              <Button
-                variant={inputMode === 'rate' ? 'primary' : 'normal'}
-                onPress={() => setInputMode('rate')}
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: theme.pageTextSubdued,
+                      marginBottom: 4,
+                    }}
+                  >
+                    <Trans>Account amount</Trans>
+                  </Text>
+                  <FinancialText style={{ fontWeight: 600 }}>
+                    {format(sourceAmount, 'financial')}
+                  </FinancialText>
+                  <Text style={{ fontSize: 12, color: theme.pageTextSubdued }}>
+                    {accountCurrency}
+                    {accountSymbol ? ` (${accountSymbol})` : ''}
+                  </Text>
+                </View>
+
+                <Text
+                  style={{
+                    color: theme.pageTextSubdued,
+                    fontSize: 18,
+                    flexShrink: 0,
+                  }}
+                >
+                  →
+                </Text>
+
+                <View style={{ flex: 1, minWidth: 0, alignItems: 'flex-end' }}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: theme.pageTextSubdued,
+                      marginBottom: 4,
+                    }}
+                  >
+                    <Trans>Budget amount</Trans>
+                  </Text>
+                  <FinancialText style={{ fontWeight: 600 }}>
+                    {format(budgetAmount, 'financial')}
+                  </FinancialText>
+                  <Text style={{ fontSize: 12, color: theme.pageTextSubdued }}>
+                    {mainCurrency}
+                    {mainSymbol ? ` (${mainSymbol})` : ''}
+                  </Text>
+                </View>
+              </View>
+
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: theme.pageTextSubdued,
+                  textAlign: 'center',
+                }}
               >
-                <Trans>Exchange rate</Trans>
-              </Button>
+                <Trans>
+                  1 {{ accountCurrency }} = {{ rate: formatExchangeRate(rate) }}{' '}
+                  {{ mainCurrency }}
+                </Trans>
+              </Text>
             </View>
 
-            {inputMode === 'amount' ? (
-              <InlineField
-                label={t('Amount in {{currency}}', { currency: mainCurrency })}
-                width="100%"
-              >
+            <InlineField
+              label={t('Amount in {{currency}}', { currency: mainCurrency })}
+              labelWidth={220}
+              width="100%"
+            >
+              <View style={{ width: 130, flexShrink: 0 }}>
                 <InitialFocus>
                   <AmountInput
                     value={budgetAmount}
                     autoDecimals={String(hideFraction) !== 'true'}
-                    onUpdate={value => {
-                      setBudgetAmount(value);
-                      if (error) {
-                        setError(null);
+                    updateOnInput
+                    onFocus={() => {
+                      editingFieldRef.current = 'amount';
+                    }}
+                    onBlur={() => {
+                      if (editingFieldRef.current === 'amount') {
+                        editingFieldRef.current = null;
                       }
                     }}
+                    onUpdate={onBudgetAmountUpdate}
+                    style={{ width: '100%' }}
                   />
                 </InitialFocus>
-              </InlineField>
-            ) : (
-              <InlineField
-                label={t('Exchange rate ({{from}} to {{to}})', {
-                  from: accountCurrency,
-                  to: mainCurrency,
-                })}
-                width="100%"
-              >
-                <InitialFocus>
-                  <ExchangeRateInput
-                    value={rate}
-                    onUpdate={value => {
-                      setRate(value);
-                      if (error) {
-                        setError(null);
-                      }
-                    }}
-                    style={{ flex: 1 }}
-                  />
-                </InitialFocus>
-              </InlineField>
-            )}
+              </View>
+            </InlineField>
 
-            {inputMode === 'rate' && (
-              <Text
-                style={{
-                  marginTop: 10,
-                  color: theme.pageTextSubdued,
-                  fontSize: 13,
+            <InlineField
+              label={t('Exchange rate ({{from}} to {{to}})', {
+                from: accountCurrency,
+                to: mainCurrency,
+              })}
+              labelWidth={220}
+              width="100%"
+              style={{ marginTop: 16 }}
+            >
+              <ExchangeRateInput
+                value={rate}
+                updateOnInput
+                onFocus={() => {
+                  editingFieldRef.current = 'rate';
                 }}
-              >
-                <Trans>
-                  Budget amount:{' '}
-                  {{ amount: format(computedFromRate, 'financial') }}
-                </Trans>
-              </Text>
-            )}
+                onBlur={() => {
+                  if (editingFieldRef.current === 'rate') {
+                    editingFieldRef.current = null;
+                  }
+                }}
+                onUpdate={onRateUpdate}
+                style={{ width: 130, flexShrink: 0 }}
+              />
+            </InlineField>
 
-            {error && <FormError style={{ marginTop: 10 }}>{error}</FormError>}
+            <Text
+              style={{
+                marginTop: 12,
+                color: theme.pageTextSubdued,
+                fontSize: 13,
+              }}
+            >
+              <Trans>
+                Edit either field — the other updates automatically.
+              </Trans>
+            </Text>
+
+            {error && <FormError style={{ marginTop: 12 }}>{error}</FormError>}
 
             <ModalButtons>
               <Button
