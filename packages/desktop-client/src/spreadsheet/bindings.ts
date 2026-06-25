@@ -53,7 +53,7 @@ export function allAccountBalance() {
   return {
     query: q('transactions')
       .filter({ 'account.closed': false })
-      .calculate({ $sum: '$amount' }),
+      .calculate({ $sum: '$main_amount' }),
     name: 'accounts-balance',
   } satisfies Binding<'account', 'accounts-balance'>;
 }
@@ -63,7 +63,7 @@ export function onBudgetAccountBalance() {
     name: `onbudget-accounts-balance`,
     query: q('transactions')
       .filter({ 'account.offbudget': false, 'account.closed': false })
-      .calculate({ $sum: '$amount' }),
+      .calculate({ $sum: '$main_amount' }),
   } satisfies Binding<'account', 'onbudget-accounts-balance'>;
 }
 
@@ -72,7 +72,7 @@ export function offBudgetAccountBalance() {
     name: `offbudget-accounts-balance`,
     query: q('transactions')
       .filter({ 'account.offbudget': true, 'account.closed': false })
-      .calculate({ $sum: '$amount' }),
+      .calculate({ $sum: '$main_amount' }),
   } satisfies Binding<'account', 'offbudget-accounts-balance'>;
 }
 
@@ -81,7 +81,7 @@ export function closedAccountBalance() {
     name: `closed-accounts-balance`,
     query: q('transactions')
       .filter({ 'account.closed': true })
-      .calculate({ $sum: '$amount' }),
+      .calculate({ $sum: '$main_amount' }),
   } satisfies Binding<'account', 'closed-accounts-balance'>;
 }
 
@@ -97,7 +97,7 @@ export function categoryBalance(
         date: { $transform: '$month', $eq: month },
       })
       .options({ splits: 'inline' })
-      .calculate({ $sum: '$amount' }),
+      .calculate({ $sum: '$main_amount' }),
   } satisfies Binding<'category', 'balance'>;
 }
 
@@ -114,7 +114,7 @@ export function categoryBalanceCleared(
         cleared: true,
       })
       .options({ splits: 'inline' })
-      .calculate({ $sum: '$amount' }),
+      .calculate({ $sum: '$main_amount' }),
   } satisfies Binding<'category', 'balanceCleared'>;
 }
 
@@ -131,14 +131,14 @@ export function categoryBalanceUncleared(
         cleared: false,
       })
       .options({ splits: 'inline' })
-      .calculate({ $sum: '$amount' }),
+      .calculate({ $sum: '$main_amount' }),
   } satisfies Binding<'category', 'balanceUncleared'>;
 }
 
 export function uncategorizedBalance<SheetName extends SheetNames>() {
   return {
     name: 'uncategorized-balance',
-    query: uncategorizedTransactions().calculate({ $sum: '$amount' }),
+    query: uncategorizedTransactions().calculate({ $sum: '$main_amount' }),
   } satisfies Binding<SheetName, 'uncategorized-balance'>;
 }
 

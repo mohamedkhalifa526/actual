@@ -24,6 +24,8 @@ export type TransactionEntity = {
   exchange_rate?: number | null;
   /** Amount in the budget (main) currency; used for budget totals when set. */
   budget_amount?: IntegerAmount | null;
+  /** Computed main-currency amount using budget_amount or exchange rates. */
+  main_amount?: IntegerAmount;
   sort_order?: number;
   cleared?: boolean;
   reconciled?: boolean;

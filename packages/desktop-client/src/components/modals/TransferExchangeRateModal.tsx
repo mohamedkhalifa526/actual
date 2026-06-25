@@ -7,12 +7,13 @@ import { Button } from '@actual-app/components/button';
 import { FormError } from '@actual-app/components/form-error';
 import { InitialFocus } from '@actual-app/components/initial-focus';
 import { InlineField } from '@actual-app/components/inline-field';
-import { Input } from '@actual-app/components/input';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
-import { computeCounterpartyAmount } from '@actual-app/core/shared/currency-transfer';
-import { toRelaxedNumber } from '@actual-app/core/shared/util';
+import {
+  computeCounterpartyAmount,
+  normalizeExchangeRate,
+} from '@actual-app/core/shared/currency-transfer';
 
 import {
   Modal,
@@ -22,6 +23,7 @@ import {
   ModalTitle,
 } from '#components/common/Modal';
 import { useFormat } from '#hooks/useFormat';
+import { ExchangeRateInput } from '#components/util/ExchangeRateInput';
 import type { Modal as ModalType } from '#modals/modalsSlice';
 
 type TransferExchangeRateModalProps = Extract<
@@ -39,24 +41,22 @@ export function TransferExchangeRateModal({
 }: TransferExchangeRateModalProps) {
   const { t } = useTranslation();
   const format = useFormat();
-  const [rate, setRate] = useState(String(defaultRate));
+  const [rate, setRate] = useState(
+    () => normalizeExchangeRate(defaultRate) ?? defaultRate,
+  );
   const [error, setError] = useState<string | null>(null);
 
-  const parsedRate = toRelaxedNumber(rate);
-  const counterpartyAmount =
-    parsedRate != null && !Number.isNaN(parsedRate)
-      ? computeCounterpartyAmount(sourceAmount, parsedRate)
-      : null;
+  const counterpartyAmount = computeCounterpartyAmount(sourceAmount, rate);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (parsedRate == null || Number.isNaN(parsedRate) || parsedRate <= 0) {
+    if (rate <= 0) {
       setError(t('Exchange rate must be a positive number'));
       return;
     }
 
-    onSubmit(parsedRate);
+    onSubmit(rate);
   };
 
   return (
@@ -91,12 +91,10 @@ export function TransferExchangeRateModal({
 
             <InlineField label={t('Exchange rate')} width="100%">
               <InitialFocus>
-                <Input
-                  inputMode="decimal"
+                <ExchangeRateInput
                   value={rate}
-                  onChangeValue={setRate}
                   onUpdate={value => {
-                    setRate(value.trim());
+                    setRate(value);
                     if (error) {
                       setError(null);
                     }

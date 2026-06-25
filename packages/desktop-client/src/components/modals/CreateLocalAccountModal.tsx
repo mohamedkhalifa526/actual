@@ -25,6 +25,7 @@ import {
 } from '#components/common/Modal';
 import { AccountCurrencySelect } from '#components/accounts/AccountCurrencySelect';
 import { Checkbox } from '#components/forms';
+import { useAllowedAccountCurrencies } from '#hooks/useCurrencyExchangeRates';
 import { validateAccountName } from '#components/util/accountValidation';
 import { useAccounts } from '#hooks/useAccounts';
 import { useNavigate } from '#hooks/useNavigate';
@@ -57,6 +58,7 @@ export function CreateLocalAccountModal() {
   };
 
   const createAccount = useCreateAccountMutation();
+  const allowedCurrencyCodes = useAllowedAccountCurrencies();
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -120,6 +122,7 @@ export function CreateLocalAccountModal() {
                   <AccountCurrencySelect
                     value={currency}
                     onChange={setCurrency}
+                    allowedCurrencyCodes={allowedCurrencyCodes}
                     style={{ width: '100%' }}
                   />
                 </View>

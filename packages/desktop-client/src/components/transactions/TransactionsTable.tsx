@@ -47,6 +47,7 @@ import { Tooltip } from '@actual-app/components/tooltip';
 import { View } from '@actual-app/components/view';
 import { memoizeOne } from '@actual-app/core/shared/memoize';
 import * as monthUtils from '@actual-app/core/shared/months';
+import { formatExchangeRate } from '@actual-app/core/shared/currency-transfer';
 import { q } from '@actual-app/core/shared/query';
 import {
   addSplitTransaction,
@@ -2012,7 +2013,7 @@ function NotesCell({
 
   const displayedNote = note || scheduleNote || '';
   const exchangeRateLabel =
-    exchangeRate != null ? `FX: ${exchangeRate}` : null;
+    exchangeRate != null ? `FX: ${formatExchangeRate(exchangeRate)}` : null;
   const budgetAmountLabel =
     budgetAmount != null
       ? `Budget: ${format(budgetAmount, 'financial')}`

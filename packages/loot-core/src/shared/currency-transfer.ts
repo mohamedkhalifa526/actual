@@ -1,5 +1,40 @@
 import type { AccountEntity } from '#types/models';
 
+export const EXCHANGE_RATE_DECIMAL_PLACES = 4;
+const EXCHANGE_RATE_SCALE = 10 ** EXCHANGE_RATE_DECIMAL_PLACES;
+
+/** Round a rate to 4 decimal places (e.g. 0.0182). */
+export function normalizeExchangeRate(rate: number): number | null {
+  if (!Number.isFinite(rate) || rate <= 0) {
+    return null;
+  }
+  return Math.round(rate * EXCHANGE_RATE_SCALE) / EXCHANGE_RATE_SCALE;
+}
+
+export function formatExchangeRate(rate: number | null | undefined): string {
+  const normalized = normalizeExchangeRate(rate ?? NaN);
+  if (normalized == null) {
+    return '';
+  }
+  return normalized.toFixed(EXCHANGE_RATE_DECIMAL_PLACES);
+}
+
+export function isValidExchangeRateInput(value: string): boolean {
+  return /^(\d+([.,]\d{0,4})?)?$/.test(value.trim());
+}
+
+export function parseExchangeRateInput(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = Number(trimmed.replace(',', '.'));
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return normalizeExchangeRate(parsed);
+}
+
 export function getAccountCurrency(
   account: Pick<AccountEntity, 'currency'> | null | undefined,
   defaultCurrencyCode = '',
@@ -46,7 +81,7 @@ export function computeExchangeRate(
   }
 
   const rate = Math.abs(destAmount) / Math.abs(sourceAmount);
-  return Number.isFinite(rate) && rate > 0 ? rate : null;
+  return normalizeExchangeRate(rate);
 }
 
 export function isForeignCurrencyAccount(
@@ -85,11 +120,129 @@ export function computeExchangeRateToMain(
   }
 
   const rate = Math.abs(budgetAmount) / Math.abs(amount);
-  return Number.isFinite(rate) && rate > 0 ? rate : null;
+  return normalizeExchangeRate(rate);
+}
+
+const mainCurrencySubquery = `(SELECT COALESCE(value, '') FROM preferences WHERE id = 'defaultCurrencyCode' LIMIT 1)`;
+
+function exchangeRateSubquery(currencyExpr: string): string {
+  return `(SELECT json_extract(value, '$.' || ${currencyExpr})
+           FROM preferences
+           WHERE id = 'currencyExchangeRates'
+           LIMIT 1)`;
+}
+
+export function buildMainAmountSqlExpression(
+  amountExpr: string,
+  budgetAmountExpr: string,
+  accountCurrencyExpr: string,
+): string {
+  const rateExpr = exchangeRateSubquery(accountCurrencyExpr);
+  return `COALESCE(
+    ${budgetAmountExpr},
+    CASE
+      WHEN ${accountCurrencyExpr} IS NOT NULL
+        AND ${accountCurrencyExpr} != ''
+        AND ${accountCurrencyExpr} != ${mainCurrencySubquery}
+        AND ${rateExpr} IS NOT NULL
+      THEN (CASE WHEN ${amountExpr} < 0 THEN -1 ELSE 1 END) * CAST(ROUND(ABS(${amountExpr}) * ${rateExpr}) AS INTEGER)
+      ELSE ${amountExpr}
+    END
+  )`;
+}
+
+export function mainAmountSqlExpressionForTransaction(): string {
+  return buildMainAmountSqlExpression(
+    'IFNULL(_.amount, 0)',
+    '_.budget_amount',
+    '__main_acct.currency',
+  );
 }
 
 /** SQL expression for budget category sums (main currency). */
-export const budgetAmountSqlExpression = 'COALESCE(t.budget_amount, t.amount)';
+export const budgetAmountSqlExpression = buildMainAmountSqlExpression(
+  't.amount',
+  't.budget_amount',
+  'a.currency',
+);
+
+export type CurrencyExchangeRates = Record<string, number>;
+
+export function parseCurrencyExchangeRates(
+  value: string | null | undefined,
+): CurrencyExchangeRates {
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+
+    const rates: CurrencyExchangeRates = {};
+    for (const [code, rate] of Object.entries(parsed)) {
+      const normalizedCode = code.trim();
+      const numericRate =
+        typeof rate === 'number' ? rate : Number.parseFloat(String(rate));
+      const normalizedRate = normalizeExchangeRate(numericRate);
+      if (normalizedCode && normalizedRate != null) {
+        rates[normalizedCode] = normalizedRate;
+      }
+    }
+    return rates;
+  } catch {
+    return {};
+  }
+}
+
+export function serializeCurrencyExchangeRates(
+  rates: CurrencyExchangeRates,
+): string {
+  const normalized: CurrencyExchangeRates = {};
+  for (const [code, rate] of Object.entries(rates)) {
+    const normalizedCode = code.trim();
+    const normalizedRate = normalizeExchangeRate(rate);
+    if (normalizedCode && normalizedRate != null) {
+      normalized[normalizedCode] = normalizedRate;
+    }
+  }
+  return JSON.stringify(normalized);
+}
+
+export function getExchangeRateToMain(
+  currencyCode: string,
+  mainCurrencyCode: string,
+  rates: CurrencyExchangeRates,
+): number | null {
+  const currency = currencyCode.trim();
+  const main = mainCurrencyCode.trim();
+  if (!currency || !main || currency === main) {
+    return null;
+  }
+
+  const rate = rates[currency];
+  return rate != null && rate > 0 ? rate : null;
+}
+
+export function getAllowedAccountCurrencies(
+  mainCurrencyCode: string,
+  rates: CurrencyExchangeRates,
+): string[] {
+  const main = mainCurrencyCode.trim();
+  if (!main) {
+    return [];
+  }
+
+  const codes = new Set<string>([main]);
+  for (const code of Object.keys(rates)) {
+    if (code && code !== main) {
+      codes.add(code);
+    }
+  }
+  return [...codes].sort();
+}
 
 export function getBudgetAmountForTransferLeg(
   legAmount: number,
@@ -122,12 +275,16 @@ export function needsBudgetAmountForTransaction(
   mainCurrencyCode: string,
   accountCurrency: string,
   isTransfer: boolean,
+  exchangeRates: CurrencyExchangeRates = {},
 ): boolean {
   const main = mainCurrencyCode.trim();
   if (!main || !account || accountCurrency === main) {
     return false;
   }
   if (transaction.is_child || transaction.budget_amount != null) {
+    return false;
+  }
+  if (getExchangeRateToMain(accountCurrency, main, exchangeRates) != null) {
     return false;
   }
   if (account.offbudget) {

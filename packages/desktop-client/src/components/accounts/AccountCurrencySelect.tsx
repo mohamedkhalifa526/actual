@@ -8,12 +8,14 @@ import { currencies } from '@actual-app/core/shared/currencies';
 type AccountCurrencySelectProps = {
   value: string;
   onChange: (currencyCode: string) => void;
+  allowedCurrencyCodes?: string[];
   style?: CSSProperties;
 };
 
 export function AccountCurrencySelect({
   value,
   onChange,
+  allowedCurrencyCodes,
   style,
 }: AccountCurrencySelectProps) {
   const { t } = useTranslation();
@@ -74,6 +76,11 @@ export function AccountCurrencySelect({
 
   const options: [string, string][] = currencies
     .filter(currency => currency.code !== '')
+    .filter(
+      currency =>
+        !allowedCurrencyCodes?.length ||
+        allowedCurrencyCodes.includes(currency.code),
+    )
     .map(currency => {
       const translatedName =
         currencyTranslations.get(currency.code) ?? currency.name;

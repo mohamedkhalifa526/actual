@@ -7,9 +7,12 @@ import {
   computeExchangeRateToMain,
   getAccountCurrency,
   getBudgetAmountForTransferLeg,
+  getAllowedAccountCurrencies,
   isCrossCurrencyTransfer,
   isForeignCurrencyAccount,
   needsBudgetAmountForTransaction,
+  parseCurrencyExchangeRates,
+  serializeCurrencyExchangeRates,
 } from './currency-transfer';
 
 describe('currency-transfer', () => {
@@ -96,5 +99,47 @@ describe('currency-transfer', () => {
         true,
       ),
     ).toBe(false);
+
+    expect(
+      needsBudgetAmountForTransaction(
+        { category: 'cat1' },
+        foreignOnBudget,
+        null,
+        'USD',
+        'EUR',
+        false,
+        { EUR: 1.08 },
+      ),
+    ).toBe(false);
+  });
+
+  it('parses and serializes exchange rates', () => {
+    expect(parseCurrencyExchangeRates('{"EUR":1.08,"GBP":"1.27"}')).toEqual({
+      EUR: 1.08,
+      GBP: 1.27,
+    });
+    expect(parseCurrencyExchangeRates('{"JPY":0.0182}')).toEqual({
+      JPY: 0.0182,
+    });
+    expect(
+      serializeCurrencyExchangeRates({ EUR: 1.08, GBP: 1.27 }),
+    ).toBe('{"EUR":1.08,"GBP":1.27}');
+    expect(serializeCurrencyExchangeRates({ JPY: 0.0182 })).toBe(
+      '{"JPY":0.0182}',
+    );
+  });
+
+  it('normalizes exchange rates to 4 decimal places', () => {
+    expect(parseCurrencyExchangeRates('{"JPY":0.018234}')).toEqual({
+      JPY: 0.0182,
+    });
+    expect(computeExchangeRateToMain(-54321, -987)).toBe(0.0182);
+  });
+
+  it('lists allowed account currencies', () => {
+    expect(getAllowedAccountCurrencies('USD', { EUR: 1.08 })).toEqual([
+      'EUR',
+      'USD',
+    ]);
   });
 });

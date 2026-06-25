@@ -11,6 +11,7 @@ import { css } from '@emotion/css';
 import { Checkbox } from '#components/forms';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 
+import { CurrencyExchangeRatesSettings } from './CurrencyExchangeRates';
 import { Column, Setting } from './UI';
 
 export function CurrencySettings() {
@@ -193,6 +194,10 @@ export function CurrencySettings() {
               </label>
             </View>
           )}
+
+          <CurrencyExchangeRatesSettings
+            mainCurrencyCode={selectedCurrencyCode}
+          />
         </View>
       }
     >

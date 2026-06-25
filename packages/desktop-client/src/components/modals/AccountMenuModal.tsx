@@ -25,6 +25,7 @@ import {
 import { AccountCurrencySelect } from '#components/accounts/AccountCurrencySelect';
 import { Notes } from '#components/Notes';
 import { validateAccountName } from '#components/util/accountValidation';
+import { useAllowedAccountCurrencies } from '#hooks/useCurrencyExchangeRates';
 import { useAccount } from '#hooks/useAccount';
 import { useAccounts } from '#hooks/useAccounts';
 import { useNotes } from '#hooks/useNotes';
@@ -48,6 +49,7 @@ export function AccountMenuModal({
 }: AccountMenuModalProps) {
   const { t } = useTranslation();
   const account = useAccount(accountId);
+  const allowedCurrencyCodes = useAllowedAccountCurrencies();
   const { data: accounts = [] } = useAccounts();
   const originalNotes = useNotes(`account-${accountId}`);
   const [accountNameError, setAccountNameError] = useState('');
@@ -179,6 +181,7 @@ export function AccountMenuModal({
                 <AccountCurrencySelect
                   value={currentCurrency}
                   onChange={onCurrencyChange}
+                  allowedCurrencyCodes={allowedCurrencyCodes}
                 />
               </View>
               <Notes

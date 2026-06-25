@@ -428,3 +428,32 @@ export async function setType(type) {
 
   return bounds;
 }
+
+export function recomputeCurrencyDependentCells() {
+  const spreadsheet = sheet.get();
+  if (!spreadsheet) {
+    return;
+  }
+
+  const globalCells = [
+    'accounts-balance',
+    'onbudget-accounts-balance',
+    'offbudget-accounts-balance',
+    'closed-accounts-balance',
+  ] as const;
+
+  for (const cellName of globalCells) {
+    const fullName = resolveName('__global', cellName);
+    if (spreadsheet.hasCell(fullName)) {
+      spreadsheet.recompute(fullName);
+    }
+  }
+
+  for (const name of spreadsheet.getNodes().keys()) {
+    const [sheetName, cellName] = name.split('!');
+    if (!sheetName?.match(/^budget\d+/) || !cellName?.startsWith('sum-amount-')) {
+      continue;
+    }
+    spreadsheet.recompute(name);
+  }
+}

@@ -36,6 +36,7 @@ import type { TableHandleRef } from '#components/table';
 import { isValidBoundaryDrop } from '#hooks/useDragDrop';
 import type { DropPosition } from '#hooks/useDragDrop';
 import { useNavigate } from '#hooks/useNavigate';
+import { useCurrencyExchangeRates } from '#hooks/useCurrencyExchangeRates';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import { pushModal } from '#modals/modalsSlice';
 import { addNotification } from '#notifications/notificationsSlice';
@@ -336,6 +337,7 @@ export function TransactionList({
   const [learnCategories = 'true'] = useSyncedPref('learn-categories');
   const isLearnCategoriesEnabled = String(learnCategories) === 'true';
   const [defaultCurrencyCode] = useSyncedPref('defaultCurrencyCode');
+  const { rates: exchangeRates } = useCurrencyExchangeRates();
   const [upcomingLength = '7'] = useSyncedPref(
     'upcomingScheduledTransactionLength',
   );
@@ -400,6 +402,7 @@ export function TransactionList({
               accounts,
               payees,
               defaultCurrencyCode: defaultCurrencyCode || '',
+              exchangeRates,
             },
           );
         } catch {
@@ -442,7 +445,7 @@ export function TransactionList({
       await saveDiff({ added: newTransactions }, isLearnCategoriesEnabled);
       onRefetch();
     },
-    [accounts, defaultCurrencyCode, dispatch, isLearnCategoriesEnabled, onRefetch, payees, promptToConvertToSchedule],
+    [accounts, defaultCurrencyCode, dispatch, exchangeRates, isLearnCategoriesEnabled, onRefetch, payees, promptToConvertToSchedule],
   );
 
   const onSave = useCallback(
@@ -499,6 +502,7 @@ export function TransactionList({
                     accounts,
                     payees,
                     defaultCurrencyCode: defaultCurrencyCode || '',
+                    exchangeRates,
                   },
                 );
                 await saveTransaction(transactionToSave);
@@ -519,6 +523,7 @@ export function TransactionList({
             accounts,
             payees,
             defaultCurrencyCode: defaultCurrencyCode || '',
+            exchangeRates,
           },
         );
         await saveTransaction(transactionToSave);
@@ -530,6 +535,7 @@ export function TransactionList({
       accounts,
       defaultCurrencyCode,
       dispatch,
+      exchangeRates,
       isLearnCategoriesEnabled,
       onChange,
       onRefetch,

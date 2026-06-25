@@ -7,15 +7,14 @@ import { Button } from '@actual-app/components/button';
 import { FormError } from '@actual-app/components/form-error';
 import { InitialFocus } from '@actual-app/components/initial-focus';
 import { InlineField } from '@actual-app/components/inline-field';
-import { Input } from '@actual-app/components/input';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import {
   computeBudgetAmount,
   computeExchangeRateToMain,
+  normalizeExchangeRate,
 } from '@actual-app/core/shared/currency-transfer';
-import { toRelaxedNumber } from '@actual-app/core/shared/util';
 import type { IntegerAmount } from '@actual-app/core/shared/util';
 
 import {
@@ -26,6 +25,7 @@ import {
   ModalTitle,
 } from '#components/common/Modal';
 import { AmountInput } from '#components/util/AmountInput';
+import { ExchangeRateInput } from '#components/util/ExchangeRateInput';
 import { useFormat } from '#hooks/useFormat';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import type { Modal as ModalType } from '#modals/modalsSlice';
@@ -59,18 +59,15 @@ export function BudgetCurrencyModal({
     sign * Math.abs(initialBudgetAmount),
   );
   const [rate, setRate] = useState(
-    String(
-      computeExchangeRateToMain(sourceAmount, initialBudgetAmount) ??
-        defaultRate,
-    ),
+    () =>
+      normalizeExchangeRate(
+        computeExchangeRateToMain(sourceAmount, initialBudgetAmount) ??
+          defaultRate,
+      ) ?? defaultRate,
   );
   const [error, setError] = useState<string | null>(null);
 
-  const parsedRate = toRelaxedNumber(rate);
-  const computedFromRate =
-    parsedRate != null && !Number.isNaN(parsedRate)
-      ? computeBudgetAmount(sourceAmount, parsedRate)
-      : null;
+  const computedFromRate = computeBudgetAmount(sourceAmount, rate);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -90,12 +87,12 @@ export function BudgetCurrencyModal({
       return;
     }
 
-    if (parsedRate == null || Number.isNaN(parsedRate) || parsedRate <= 0) {
+    if (rate <= 0) {
       setError(t('Exchange rate must be a positive number'));
       return;
     }
 
-    onSubmit(computeBudgetAmount(sourceAmount, parsedRate));
+    onSubmit(computeBudgetAmount(sourceAmount, rate));
   };
 
   return (
@@ -180,12 +177,10 @@ export function BudgetCurrencyModal({
                 width="100%"
               >
                 <InitialFocus>
-                  <Input
-                    inputMode="decimal"
+                  <ExchangeRateInput
                     value={rate}
-                    onChangeValue={setRate}
                     onUpdate={value => {
-                      setRate(value.trim());
+                      setRate(value);
                       if (error) {
                         setError(null);
                       }
@@ -196,7 +191,7 @@ export function BudgetCurrencyModal({
               </InlineField>
             )}
 
-            {inputMode === 'rate' && computedFromRate != null && (
+            {inputMode === 'rate' && (
               <Text
                 style={{
                   marginTop: 10,

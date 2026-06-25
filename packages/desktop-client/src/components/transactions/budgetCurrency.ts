@@ -1,7 +1,9 @@
 import {
   getAccountCurrency,
+  getExchangeRateToMain,
   needsBudgetAmountForTransaction,
 } from '@actual-app/core/shared/currency-transfer';
+import type { CurrencyExchangeRates } from '@actual-app/core/shared/currency-transfer';
 import type {
   AccountEntity,
   PayeeEntity,
@@ -19,6 +21,7 @@ type TransactionCurrencyContext = {
   accounts: AccountEntity[];
   payees: PayeeEntity[];
   defaultCurrencyCode: string;
+  exchangeRates?: CurrencyExchangeRates;
 };
 
 export async function prepareForeignCurrencyTransaction(
@@ -71,11 +74,13 @@ export async function withBudgetCurrencyAmount(
     accounts,
     payees,
     defaultCurrencyCode,
+    exchangeRates = {},
   }: {
     dispatch: AppDispatch;
     accounts: AccountEntity[];
     payees: PayeeEntity[];
     defaultCurrencyCode: string;
+    exchangeRates?: CurrencyExchangeRates;
   },
 ): Promise<TransactionEntity> {
   const account = accounts.find(a => a.id === transaction.account);
@@ -85,6 +90,11 @@ export async function withBudgetCurrencyAmount(
   const transferAccount = transferAccountId
     ? accounts.find(a => a.id === transferAccountId)
     : undefined;
+  const configuredRate = getExchangeRateToMain(
+    accountCurrency,
+    mainCurrency,
+    exchangeRates,
+  );
 
   if (
     !needsBudgetAmountForTransaction(
@@ -94,6 +104,7 @@ export async function withBudgetCurrencyAmount(
       mainCurrency,
       accountCurrency,
       !!transferAccountId,
+      exchangeRates,
     )
   ) {
     return transaction;
@@ -106,7 +117,7 @@ export async function withBudgetCurrencyAmount(
       mainCurrency,
       sourceAmount: transaction.amount,
       defaultBudgetAmount: transaction.budget_amount,
-      defaultRate: 1,
+      defaultRate: configuredRate ?? 1,
     });
 
     return {

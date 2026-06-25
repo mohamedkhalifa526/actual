@@ -7,6 +7,7 @@ import { resetFormulaPreferencesCache } from '#server/formulas/bootstrap';
 import { getDefaultDocumentDir } from '#server/main';
 import { mutator } from '#server/mutators';
 import { post } from '#server/post';
+import { recomputeCurrencyDependentCells } from '#server/budget/base';
 import {
   getPrefs as _getMetadataPrefs,
   savePrefs as _saveMetadataPrefs,
@@ -32,6 +33,7 @@ const FORMULA_FORMAT_SYNCED_PREFS = new Set<keyof SyncedPrefs>([
   'numberFormat',
   'hideFraction',
   'defaultCurrencyCode',
+  'currencyExchangeRates',
   'currencySymbolPosition',
   'currencySpaceBetweenAmountAndSymbol',
 ]);
@@ -62,6 +64,10 @@ async function saveSyncedPrefs({
 
   if (FORMULA_FORMAT_SYNCED_PREFS.has(id)) {
     resetFormulaPreferencesCache();
+  }
+
+  if (id === 'currencyExchangeRates' || id === 'defaultCurrencyCode') {
+    recomputeCurrencyDependentCells();
   }
 }
 

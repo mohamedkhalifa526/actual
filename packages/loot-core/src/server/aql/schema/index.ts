@@ -1,6 +1,8 @@
 // @ts-strict-ignore
 import type { SchemaConfig } from '#server/aql/compiler';
 
+import { mainAmountSqlExpressionForTransaction } from '#shared/currency-transfer';
+
 function f(type: string, opts?: Record<string, unknown>) {
   return { type, ...opts };
 }
@@ -50,6 +52,7 @@ export const schema = {
     transfer_id: f('id'),
     exchange_rate: f('float'),
     budget_amount: f('integer'),
+    main_amount: f('integer'),
     sort_order: f('float', { default: () => Date.now() }),
     cleared: f('boolean', { default: true }),
     reconciled: f('boolean', { default: false }),
@@ -375,6 +378,7 @@ export const schemaConfig: SchemaConfig = {
           payee: 'pm.targetId',
           category: `CASE WHEN _.isParent = 1 THEN NULL ELSE cm.transferId END`,
           amount: `IFNULL(_.amount, 0)`,
+          main_amount: mainAmountSqlExpressionForTransaction(),
           parent_id: 'CASE WHEN _.isChild = 0 THEN NULL ELSE _.parent_id END',
         });
 
@@ -382,6 +386,7 @@ export const schemaConfig: SchemaConfig = {
           SELECT ${fields} FROM transactions _
           LEFT JOIN category_mapping cm ON cm.id = _.category
           LEFT JOIN payee_mapping pm ON pm.id = _.description
+          LEFT JOIN accounts __main_acct ON __main_acct.id = _.acct
           WHERE
            _.date IS NOT NULL AND
            _.acct IS NOT NULL AND
