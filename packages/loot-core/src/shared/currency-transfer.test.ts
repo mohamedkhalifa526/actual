@@ -8,7 +8,7 @@ import {
   getAccountCurrency,
   getBudgetAmountForTransferLeg,
   getAllowedAccountCurrencies,
-  isCrossCurrencyTransfer,
+  canEditTransactionBudgetAmount,
   isForeignCurrencyAccount,
   needsBudgetAmountForTransaction,
   parseCurrencyExchangeRates,
@@ -141,5 +141,42 @@ describe('currency-transfer', () => {
       'EUR',
       'USD',
     ]);
+  });
+
+  it('allows editing budget amount for eligible foreign transactions', () => {
+    const foreignOnBudget = { currency: 'EUR', offbudget: 0 };
+
+    expect(
+      canEditTransactionBudgetAmount(
+        { category: 'cat1' },
+        foreignOnBudget,
+        null,
+        'USD',
+        'EUR',
+        false,
+      ),
+    ).toBe(true);
+
+    expect(
+      canEditTransactionBudgetAmount(
+        { category: 'cat1', budget_amount: 10800 },
+        foreignOnBudget,
+        null,
+        'USD',
+        'EUR',
+        false,
+      ),
+    ).toBe(true);
+
+    expect(
+      canEditTransactionBudgetAmount(
+        { category: 'cat1' },
+        { currency: null, offbudget: 0 },
+        null,
+        'USD',
+        'USD',
+        false,
+      ),
+    ).toBe(false);
   });
 });

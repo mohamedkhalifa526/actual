@@ -40,10 +40,12 @@ import { useCurrencyExchangeRates } from '#hooks/useCurrencyExchangeRates';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import { pushModal } from '#modals/modalsSlice';
 import { addNotification } from '#notifications/notificationsSlice';
+import { aqlQuery } from '#queries/aqlQuery';
 import { useDispatch } from '#redux';
 
 import { shouldApplyRuleChange } from './table/utils';
-import { prepareForeignCurrencyTransaction } from './budgetCurrency';
+import { prepareForeignCurrencyTransaction, editTransactionBudgetAmount } from './budgetCurrency';
+import { editTransferExchangeRate } from './transferExchangeRate';
 import { TransactionTable } from './TransactionsTable';
 import type { TransactionTableProps } from './TransactionsTable';
 // When data changes, there are two ways to update the UI:
@@ -448,32 +450,37 @@ export function TransactionList({
     [accounts, defaultCurrencyCode, dispatch, exchangeRates, isLearnCategoriesEnabled, onRefetch, payees, promptToConvertToSchedule],
   );
 
+  const persistTransaction = useCallback(
+    async (transactionToSave: TransactionEntity) => {
+      const changes = updateTransaction(
+        transactionsLatest.current,
+        transactionToSave,
+      );
+      transactionsLatest.current = changes.data;
+
+      if (changes.diff.updated.length > 0) {
+        const dateChanged = !!changes.diff.updated[0].date;
+        if (dateChanged) {
+          changes.diff.updated[0].sort_order = Date.now();
+          await saveDiff(changes.diff, isLearnCategoriesEnabled);
+          onRefetch();
+        } else {
+          onChange(changes.newTransaction, changes.data);
+          void saveDiffAndApply(
+            changes.diff,
+            changes,
+            onChange,
+            isLearnCategoriesEnabled,
+          );
+        }
+      }
+    },
+    [isLearnCategoriesEnabled, onChange, onRefetch],
+  );
+
   const onSave = useCallback(
     async (transaction: TransactionEntity) => {
-      const saveTransaction = async (transactionToSave: TransactionEntity) => {
-        const changes = updateTransaction(
-          transactionsLatest.current,
-          transactionToSave,
-        );
-        transactionsLatest.current = changes.data;
-
-        if (changes.diff.updated.length > 0) {
-          const dateChanged = !!changes.diff.updated[0].date;
-          if (dateChanged) {
-            changes.diff.updated[0].sort_order = Date.now();
-            await saveDiff(changes.diff, isLearnCategoriesEnabled);
-            onRefetch();
-          } else {
-            onChange(changes.newTransaction, changes.data);
-            void saveDiffAndApply(
-              changes.diff,
-              changes,
-              onChange,
-              isLearnCategoriesEnabled,
-            );
-          }
-        }
-      };
+      const saveTransaction = persistTransaction;
 
       const isLinkedToSchedule = !!transaction.schedule;
       if (isFutureTransaction(transaction) && !isLinkedToSchedule) {
@@ -536,12 +543,71 @@ export function TransactionList({
       defaultCurrencyCode,
       dispatch,
       exchangeRates,
-      isLearnCategoriesEnabled,
-      onChange,
-      onRefetch,
       payees,
+      persistTransaction,
       promptToConvertToSchedule,
     ],
+  );
+
+  const onEditBudgetAmount = useCallback(
+    async (transaction: TransactionEntity) => {
+      try {
+        const updated = await editTransactionBudgetAmount(transaction, {
+          dispatch,
+          accounts,
+          payees,
+          defaultCurrencyCode: defaultCurrencyCode || '',
+          exchangeRates,
+        });
+        await persistTransaction(updated);
+      } catch {
+        // User cancelled the modal.
+      }
+    },
+    [
+      accounts,
+      defaultCurrencyCode,
+      dispatch,
+      exchangeRates,
+      payees,
+      persistTransaction,
+    ],
+  );
+
+  const onEditTransferExchangeRate = useCallback(
+    async (transaction: TransactionEntity) => {
+      try {
+        let allTransactions = transactionsLatest.current;
+
+        if (
+          transaction.transfer_id &&
+          !allTransactions.some(t => t.id === transaction.transfer_id)
+        ) {
+          const { data } = await aqlQuery(
+            q('transactions')
+              .filter({ id: transaction.transfer_id })
+              .select('*'),
+          );
+          if (data[0]) {
+            allTransactions = [...allTransactions, data[0]];
+          }
+        }
+
+        const updates = await editTransferExchangeRate(transaction, {
+          dispatch,
+          accounts,
+          payees,
+          defaultCurrencyCode: defaultCurrencyCode || '',
+          allTransactions,
+        });
+        for (const updated of updates) {
+          await persistTransaction(updated);
+        }
+      } catch {
+        // User cancelled the modal.
+      }
+    },
+    [accounts, defaultCurrencyCode, dispatch, payees, persistTransaction],
   );
 
   const onAddSplit = useCallback(
@@ -835,6 +901,10 @@ export function TransactionList({
         onCreateRule={onCreateRule}
         onScheduleAction={onScheduleAction}
         onMakeAsNonSplitTransactions={onMakeAsNonSplitTransactions}
+        onEditBudgetAmount={onEditBudgetAmount}
+        onEditTransferExchangeRate={onEditTransferExchangeRate}
+        defaultCurrencyCode={defaultCurrencyCode || ''}
+        exchangeRates={exchangeRates}
         showSelection={showSelection}
         allowSplitTransaction={allowSplitTransaction}
       />

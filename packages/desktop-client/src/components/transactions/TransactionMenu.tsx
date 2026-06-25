@@ -32,6 +32,8 @@ type BalanceMenuProps = Omit<
     ids: TransactionEntity['id'][],
   ) => void;
   onMakeAsNonSplitTransactions: (ids: string[]) => void;
+  onEditBudgetAmount?: () => void;
+  onEditTransferExchangeRate?: () => void;
   closeMenu: () => void;
 };
 
@@ -45,6 +47,8 @@ export function TransactionMenu({
   onCreateRule,
   onScheduleAction,
   onMakeAsNonSplitTransactions,
+  onEditBudgetAmount,
+  onEditTransferExchangeRate,
   closeMenu,
   ...props
 }: BalanceMenuProps) {
@@ -186,6 +190,12 @@ export function TransactionMenu({
           case 'create-rule':
             onCreateRule(selectedIds);
             break;
+          case 'edit-budget-amount':
+            onEditBudgetAmount?.();
+            break;
+          case 'edit-exchange-rate':
+            onEditTransferExchangeRate?.();
+            break;
           default:
             throw new Error(`Unrecognized menu option: ${name}`);
         }
@@ -210,6 +220,22 @@ export function TransactionMenu({
                 : []),
             ]
           : [
+              ...(onEditBudgetAmount && selectedIds.length === 1
+                ? [
+                    {
+                      name: 'edit-budget-amount',
+                      text: t('Edit budget amount'),
+                    },
+                  ]
+                : []),
+              ...(onEditTransferExchangeRate && selectedIds.length === 1
+                ? [
+                    {
+                      name: 'edit-exchange-rate',
+                      text: t('Edit exchange rate'),
+                    },
+                  ]
+                : []),
               ...(ambiguousDuplication
                 ? []
                 : [{ name: 'duplicate', text: t('Duplicate') }]),

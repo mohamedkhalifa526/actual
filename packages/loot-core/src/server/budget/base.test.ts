@@ -510,4 +510,44 @@ describe('Base budget', () => {
     const jan = monthUtils.sheetForMonth('2017-01');
     expect(sheet.getCellValue(jan, `sum-amount-${foodId}`)).toBe(-1000);
   });
+
+  it('Recomputes category totals when budget_amount changes', async () => {
+    await sheet.loadSpreadsheet(db);
+    sheet.get().meta().budgetType = 'envelope';
+
+    await db.insertCategoryGroup({ id: 'group1', name: 'Expenses' });
+    await db.insertCategoryGroup({
+      id: 'group2',
+      name: 'Income',
+      is_income: 1,
+    });
+    const foodId = await db.insertCategory({
+      name: 'Food',
+      cat_group: 'group1',
+    });
+
+    await db.insertAccount({ id: 'onbudget', name: 'On budget' });
+
+    const transactionId = await db.insertTransaction({
+      date: '2017-01-10',
+      amount: -10000,
+      budget_amount: -15000,
+      account: 'onbudget',
+      category: foodId,
+    });
+
+    await createAllBudgets();
+    await sheet.waitOnSpreadsheet();
+
+    const sheetName = monthUtils.sheetForMonth('2017-01');
+    expect(sheet.getCellValue(sheetName, `sum-amount-${foodId}`)).toBe(-15000);
+
+    await db.updateTransaction({
+      id: transactionId,
+      budget_amount: -12000,
+    });
+    await sheet.waitOnSpreadsheet();
+
+    expect(sheet.getCellValue(sheetName, `sum-amount-${foodId}`)).toBe(-12000);
+  });
 });

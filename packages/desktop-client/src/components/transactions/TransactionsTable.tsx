@@ -47,7 +47,15 @@ import { Tooltip } from '@actual-app/components/tooltip';
 import { View } from '@actual-app/components/view';
 import { memoizeOne } from '@actual-app/core/shared/memoize';
 import * as monthUtils from '@actual-app/core/shared/months';
-import { formatExchangeRate } from '@actual-app/core/shared/currency-transfer';
+import {
+  canEditTransactionBudgetAmount,
+  computeBudgetAmount,
+  computeExchangeRate,
+  formatExchangeRate,
+  getAccountCurrency,
+  getExchangeRateToMain,
+} from '@actual-app/core/shared/currency-transfer';
+import type { CurrencyExchangeRates } from '@actual-app/core/shared/currency-transfer';
 import { q } from '@actual-app/core/shared/query';
 import {
   addSplitTransaction,
@@ -150,6 +158,7 @@ import type {
   TransactionEditFunction,
   TransactionUpdateFunction,
 } from './table/utils';
+import { canEditTransferExchangeRate } from './transferExchangeRate';
 import { TransactionMenu } from './TransactionMenu';
 
 type TransactionHeaderProps = {
@@ -887,6 +896,10 @@ type TransactionProps = {
     ids: TransactionEntity['id'][],
   ) => void;
   onMakeAsNonSplitTransactions?: (ids: TransactionEntity['id'][]) => void;
+  onEditBudgetAmount?: (transaction: TransactionEntity) => void;
+  onEditTransferExchangeRate?: (transaction: TransactionEntity) => void;
+  defaultCurrencyCode?: string;
+  exchangeRates?: CurrencyExchangeRates;
   onSplit: (id: TransactionEntity['id']) => void;
   onToggleSplit: (id: TransactionEntity['id']) => void;
   onCreatePayee: (name: string) => Promise<null | PayeeEntity['id']>;
@@ -947,6 +960,10 @@ const Transaction = memo(function Transaction({
   onCreateRule,
   onScheduleAction,
   onMakeAsNonSplitTransactions,
+  onEditBudgetAmount,
+  onEditTransferExchangeRate,
+  defaultCurrencyCode = '',
+  exchangeRates = {},
   onSplit,
   onManagePayees,
   onCreatePayee,
@@ -1189,6 +1206,48 @@ const Transaction = memo(function Transaction({
   const isBudgetTransfer = transferAcct && transferAcct.offbudget === 0;
   const isOffBudget = account && account.offbudget === 1;
 
+  const mainCurrency = defaultCurrencyCode.trim();
+  const accountCurrency = getAccountCurrency(account, mainCurrency);
+  const isTransfer = !!transferAcct;
+  const canEditBudget =
+    !isPreview &&
+    !isChild &&
+    !!onEditBudgetAmount &&
+    canEditTransactionBudgetAmount(
+      transaction,
+      account,
+      transferAcct,
+      mainCurrency,
+      accountCurrency,
+      isTransfer,
+    );
+  const canEditFx =
+    !isPreview &&
+    !isChild &&
+    !!onEditTransferExchangeRate &&
+    canEditTransferExchangeRate(account, transferAcct, mainCurrency);
+
+  const counterparty =
+    transaction.transfer_id && allTransactions
+      ? allTransactions.find(t => t.id === transaction.transfer_id)
+      : allTransactions?.find(t => t.transfer_id === id);
+
+  const configuredRate = getExchangeRateToMain(
+    accountCurrency,
+    mainCurrency,
+    exchangeRates,
+  );
+  const displayBudgetAmount =
+    budgetAmount ??
+    (canEditBudget && configuredRate != null
+      ? computeBudgetAmount(amount, configuredRate)
+      : null);
+  const displayExchangeRate =
+    exchangeRate ??
+    (canEditFx && counterparty
+      ? computeExchangeRate(amount, counterparty.amount)
+      : null);
+
   const valueStyle = added
     ? { fontWeight: 600, color: theme.tableTextItemAdded }
     : null;
@@ -1391,6 +1450,16 @@ const Transaction = memo(function Transaction({
             onScheduleAction={(name, ids) => onScheduleAction?.(name, ids)}
             onMakeAsNonSplitTransactions={ids =>
               onMakeAsNonSplitTransactions?.(ids)
+            }
+            onEditBudgetAmount={
+              canEditBudget
+                ? () => onEditBudgetAmount?.(deserializeTransaction(transaction, originalTransaction))
+                : undefined
+            }
+            onEditTransferExchangeRate={
+              canEditFx
+                ? () => onEditTransferExchangeRate?.(deserializeTransaction(transaction, originalTransaction))
+                : undefined
             }
             closeMenu={() => setMenuOpen(false)}
           />
@@ -1596,8 +1665,10 @@ const Transaction = memo(function Transaction({
 
         <NotesCell
           note={notes ?? ''}
-          exchangeRate={exchangeRate}
-          budgetAmount={budgetAmount}
+          exchangeRate={displayExchangeRate}
+          budgetAmount={displayBudgetAmount}
+          canEditExchangeRate={canEditFx}
+          canEditBudgetAmount={canEditBudget}
           scheduleNote={isPreview ? schedule?.name : null}
           focused={focusedField === 'notes'}
           valueStyle={valueStyle}
@@ -1605,6 +1676,22 @@ const Transaction = memo(function Transaction({
           onUpdate={value => {
             onUpdate('notes', value?.trim());
           }}
+          onEditExchangeRate={
+            canEditFx
+              ? () =>
+                  onEditTransferExchangeRate?.(
+                    deserializeTransaction(transaction, originalTransaction),
+                  )
+              : undefined
+          }
+          onEditBudgetAmount={
+            canEditBudget
+              ? () =>
+                  onEditBudgetAmount?.(
+                    deserializeTransaction(transaction, originalTransaction),
+                  )
+              : undefined
+          }
           onExpose={name => !isPreview && onEdit(id, name)}
         />
 
@@ -1978,24 +2065,32 @@ type NotesCellProps = {
   note: string;
   exchangeRate?: number | null;
   budgetAmount?: number | null;
+  canEditExchangeRate?: boolean;
+  canEditBudgetAmount?: boolean;
   scheduleNote: string | null | undefined;
   focused: boolean;
   valueStyle: CSSProperties | null;
   onUpdate: (value: string) => void;
   onClickTag: (tag: string) => void;
   onExpose: (name: string) => void;
+  onEditExchangeRate?: () => void;
+  onEditBudgetAmount?: () => void;
 };
 
 function NotesCell({
   note,
   exchangeRate,
   budgetAmount,
+  canEditExchangeRate = false,
+  canEditBudgetAmount = false,
   scheduleNote,
   focused,
   valueStyle,
   onUpdate,
   onClickTag,
   onExpose,
+  onEditExchangeRate,
+  onEditBudgetAmount,
 }: NotesCellProps) {
   const format = useFormat();
   const [inputValue, setInputValue] = useState(note);
@@ -2019,6 +2114,13 @@ function NotesCell({
       ? `Budget: ${format(budgetAmount, 'financial')}`
       : null;
 
+  const sublabelStyle = (editable: boolean) => ({
+    fontSize: 11,
+    color: theme.pageTextSubdued,
+    marginTop: 2,
+    ...(editable ? { cursor: 'pointer', textDecoration: 'underline' } : {}),
+  });
+
   return (
     <CustomCell
       width="flex"
@@ -2030,22 +2132,30 @@ function NotesCell({
           {NotesTagFormatter({ notes: value, onNotesTagClick: onClickTag })}
           {exchangeRateLabel && !focused && (
             <Text
-              style={{
-                fontSize: 11,
-                color: theme.pageTextSubdued,
-                marginTop: 2,
-              }}
+              style={sublabelStyle(canEditExchangeRate)}
+              onClick={
+                canEditExchangeRate && onEditExchangeRate
+                  ? event => {
+                      event.stopPropagation();
+                      onEditExchangeRate();
+                    }
+                  : undefined
+              }
             >
               {exchangeRateLabel}
             </Text>
           )}
           {budgetAmountLabel && !focused && (
             <Text
-              style={{
-                fontSize: 11,
-                color: theme.pageTextSubdued,
-                marginTop: 2,
-              }}
+              style={sublabelStyle(canEditBudgetAmount)}
+              onClick={
+                canEditBudgetAmount && onEditBudgetAmount
+                  ? event => {
+                      event.stopPropagation();
+                      onEditBudgetAmount();
+                    }
+                  : undefined
+              }
             >
               {budgetAmountLabel}
             </Text>
@@ -2374,6 +2484,10 @@ type TransactionTableInnerProps = {
     ids: TransactionEntity['id'][],
   ) => void;
   onMakeAsNonSplitTransactions: (ids: TransactionEntity['id'][]) => void;
+  onEditBudgetAmount?: (transaction: TransactionEntity) => void;
+  onEditTransferExchangeRate?: (transaction: TransactionEntity) => void;
+  defaultCurrencyCode?: string;
+  exchangeRates?: CurrencyExchangeRates;
   showSelection: boolean;
   allowSplitTransaction?: boolean;
 
@@ -2577,6 +2691,10 @@ function TransactionTableInner({
         onCreateRule={props.onCreateRule}
         onScheduleAction={props.onScheduleAction}
         onMakeAsNonSplitTransactions={props.onMakeAsNonSplitTransactions}
+        onEditBudgetAmount={props.onEditBudgetAmount}
+        onEditTransferExchangeRate={props.onEditTransferExchangeRate}
+        defaultCurrencyCode={props.defaultCurrencyCode}
+        exchangeRates={props.exchangeRates}
         onSplit={props.onSplit}
         onManagePayees={props.onManagePayees}
         onCreatePayee={props.onCreatePayee}
@@ -2779,6 +2897,10 @@ export type TransactionTableProps = {
     ids: TransactionEntity['id'][],
   ) => void;
   onMakeAsNonSplitTransactions: (ids: string[]) => void;
+  onEditBudgetAmount?: (transaction: TransactionEntity) => void;
+  onEditTransferExchangeRate?: (transaction: TransactionEntity) => void;
+  defaultCurrencyCode?: string;
+  exchangeRates?: CurrencyExchangeRates;
   showSelection: boolean;
   allowSplitTransaction?: boolean;
   onManagePayees: (id?: PayeeEntity['id']) => void;

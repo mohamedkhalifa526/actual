@@ -126,6 +126,8 @@ function handleTransactionChange(transaction, changedFields) {
       changedFields.has('acct') ||
       changedFields.has('amount') ||
       changedFields.has('category') ||
+      changedFields.has('budget_amount') ||
+      changedFields.has('exchange_rate') ||
       changedFields.has('tombstone') ||
       changedFields.has('isParent')) &&
     transaction.date &&

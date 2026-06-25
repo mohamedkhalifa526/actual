@@ -306,3 +306,41 @@ export function needsBudgetAmountForTransaction(
 
   return true;
 }
+
+export function canEditTransactionBudgetAmount(
+  transaction: {
+    category?: string | null;
+    is_child?: boolean;
+  },
+  account: Pick<AccountEntity, 'offbudget'> | null | undefined,
+  transferAccount: Pick<AccountEntity, 'currency' | 'offbudget'> | null | undefined,
+  mainCurrencyCode: string,
+  accountCurrency: string,
+  isTransfer: boolean,
+): boolean {
+  const main = mainCurrencyCode.trim();
+  if (!main || !account || accountCurrency === main) {
+    return false;
+  }
+  if (transaction.is_child) {
+    return false;
+  }
+  if (account.offbudget) {
+    return false;
+  }
+
+  if (isTransfer && transferAccount) {
+    if (account.offbudget === transferAccount.offbudget) {
+      return false;
+    }
+
+    const toCurrency = getAccountCurrency(transferAccount, main);
+    if (accountCurrency === main || toCurrency === main) {
+      return false;
+    }
+
+    return !!transaction.category;
+  }
+
+  return true;
+}

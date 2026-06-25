@@ -1,6 +1,9 @@
 import {
   getAccountCurrency,
   isCrossCurrencyTransfer,
+  computeCounterpartyAmount,
+  computeExchangeRate,
+  normalizeExchangeRate,
 } from '@actual-app/core/shared/currency-transfer';
 import type {
   AccountEntity,
@@ -10,6 +13,14 @@ import type {
 
 import { pushModal } from '#modals/modalsSlice';
 import type { AppDispatch } from '#redux/store';
+
+export function canEditTransferExchangeRate(
+  fromAccount: AccountEntity | undefined,
+  toAccount: AccountEntity | undefined,
+  defaultCurrencyCode: string,
+): boolean {
+  return isCrossCurrencyTransfer(fromAccount, toAccount, defaultCurrencyCode);
+}
 
 export function getTransferAccountId(
   payeeId: PayeeEntity['id'] | null | undefined,
@@ -104,4 +115,76 @@ export async function withTransferExchangeRate(
   } catch {
     throw new Error('transfer-exchange-rate-cancelled');
   }
+}
+
+export async function editTransferExchangeRate(
+  transaction: TransactionEntity,
+  {
+    dispatch,
+    accounts,
+    payees,
+    defaultCurrencyCode,
+    allTransactions,
+  }: {
+    dispatch: AppDispatch;
+    accounts: AccountEntity[];
+    payees: PayeeEntity[];
+    defaultCurrencyCode: string;
+    allTransactions: TransactionEntity[];
+  },
+): Promise<TransactionEntity[]> {
+  const transferAccountId = getTransferAccountId(transaction.payee, payees);
+  if (!transferAccountId) {
+    return [transaction];
+  }
+
+  const fromAccount = accounts.find(a => a.id === transaction.account);
+  const toAccount = accounts.find(a => a.id === transferAccountId);
+
+  if (!canEditTransferExchangeRate(fromAccount, toAccount, defaultCurrencyCode)) {
+    return [transaction];
+  }
+
+  const counterparty = transaction.transfer_id
+    ? allTransactions.find(t => t.id === transaction.transfer_id)
+    : allTransactions.find(t => t.transfer_id === transaction.id);
+
+  const defaultRate =
+    normalizeExchangeRate(transaction.exchange_rate ?? NaN) ??
+    (counterparty
+      ? computeExchangeRate(transaction.amount, counterparty.amount)
+      : null) ??
+    1;
+
+  const exchangeRate = await promptTransferExchangeRate({
+    dispatch,
+    fromAccount,
+    toAccount,
+    defaultCurrencyCode,
+    sourceAmount: transaction.amount,
+    defaultRate,
+  });
+
+  const counterpartyAmount = computeCounterpartyAmount(
+    transaction.amount,
+    exchangeRate,
+  );
+
+  const updatedTransaction: TransactionEntity = {
+    ...transaction,
+    exchange_rate: exchangeRate,
+  };
+
+  if (!counterparty) {
+    return [updatedTransaction];
+  }
+
+  return [
+    updatedTransaction,
+    {
+      ...counterparty,
+      amount: counterpartyAmount,
+      exchange_rate: exchangeRate,
+    },
+  ];
 }
