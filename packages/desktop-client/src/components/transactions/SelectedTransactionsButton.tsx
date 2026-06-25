@@ -14,8 +14,10 @@ import { validForTransfer } from '@actual-app/core/shared/transfer';
 import type { TransactionEntity } from '@actual-app/core/types/models';
 
 import { SelectedItemsButton } from '#components/table';
+import { useAccounts } from '#hooks/useAccounts';
 import { useSchedules } from '#hooks/useSchedules';
 import { useSelectedItems } from '#hooks/useSelected';
+import { useSyncedPref } from '#hooks/useSyncedPref';
 import { pushModal } from '#modals/modalsSlice';
 import { useDispatch } from '#redux';
 
@@ -69,6 +71,8 @@ export function SelectedTransactionsButton({
 }: SelectedTransactionsButtonProps) {
   const { t } = useTranslation();
   const dispatch = useDispatch();
+  const { data: accounts = [] } = useAccounts();
+  const [defaultCurrencyCode] = useSyncedPref('defaultCurrencyCode');
   const selectedItems = useSelectedItems();
   const selectedIds = useMemo(() => [...selectedItems], [selectedItems]);
 
@@ -132,8 +136,11 @@ export function SelectedTransactionsButton({
       return false;
     }
     const [fromTrans, toTrans] = twoTransactions;
-    return validForTransfer(fromTrans, toTrans);
-  }, [twoTransactions]);
+    return validForTransfer(fromTrans, toTrans, {
+      accounts,
+      defaultCurrencyCode: defaultCurrencyCode || '',
+    });
+  }, [accounts, defaultCurrencyCode, twoTransactions]);
 
   const canMerge = useMemo(() => {
     return Boolean(

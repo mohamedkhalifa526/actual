@@ -156,6 +156,24 @@ async function stagePublicData(): Promise<void> {
   );
 }
 
+const stagePublicDataOnChange = (): Plugin => ({
+  name: 'stage-public-data-on-change',
+  configureServer(server) {
+    const migrationsDir = path.resolve(lootCoreRoot, 'migrations');
+    server.watcher.add(migrationsDir);
+    server.watcher.on('change', async file => {
+      if (!file.startsWith(migrationsDir)) {
+        return;
+      }
+
+      await stagePublicData();
+      server.config.logger.info('Re-staged public data after migration change');
+      for (const wsc of server.ws.clients) {
+        wsc.send(JSON.stringify({ type: 'static-changed' }));
+      }
+    });
+  },
+});
 const lootCoreBackend = (): Plugin => ({
   name: 'loot-core-backend',
   configureServer(server) {
@@ -383,6 +401,7 @@ export default defineConfig(async ({ mode, command }) => {
           }),
       injectShims(),
       addWatchers(),
+      mode === 'desktop' || isVitest ? undefined : stagePublicDataOnChange(),
       mode === 'desktop' || isVitest ? undefined : lootCoreBackend(),
       mode === 'desktop' ? undefined : pluginsServiceAssets(),
       react(),

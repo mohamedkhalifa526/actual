@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { ComponentProps, CSSProperties } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
@@ -22,6 +22,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '#components/common/Modal';
+import { AccountCurrencySelect } from '#components/accounts/AccountCurrencySelect';
 import { Notes } from '#components/Notes';
 import { validateAccountName } from '#components/util/accountValidation';
 import { useAccount } from '#hooks/useAccount';
@@ -53,6 +54,27 @@ export function AccountMenuModal({
   const [currentAccountName, setCurrentAccountName] = useState(
     account?.name || t('New Account'),
   );
+  const [currentCurrency, setCurrentCurrency] = useState(
+    account?.currency || '',
+  );
+
+  useEffect(() => {
+    setCurrentCurrency(account?.currency || '');
+  }, [account?.currency]);
+
+  const onCurrencyChange = (currency: string) => {
+    setCurrentCurrency(currency);
+    if (!account) {
+      return;
+    }
+
+    if ((account.currency || '') !== currency) {
+      onSave?.({
+        ...account,
+        currency: currency || null,
+      });
+    }
+  };
 
   const onRename = (newName: string) => {
     newName = newName.trim();
@@ -153,6 +175,12 @@ export function AccountMenuModal({
                 flex: 1,
               }}
             >
+              <View style={{ marginBottom: 15 }}>
+                <AccountCurrencySelect
+                  value={currentCurrency}
+                  onChange={onCurrencyChange}
+                />
+              </View>
               <Notes
                 notes={
                   originalNotes && originalNotes.length > 0

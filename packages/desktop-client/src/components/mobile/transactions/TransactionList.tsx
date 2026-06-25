@@ -47,6 +47,7 @@ import { useNavigate } from '#hooks/useNavigate';
 import { usePayees } from '#hooks/usePayees';
 import { useScrollListener } from '#hooks/useScrollListener';
 import { useSelectedDispatch, useSelectedItems } from '#hooks/useSelected';
+import { useSyncedPref } from '#hooks/useSyncedPref';
 import { useTransactionBatchActions } from '#hooks/useTransactionBatchActions';
 import { useUndo } from '#hooks/useUndo';
 import { setNotificationInset } from '#notifications/notificationsSlice';
@@ -336,6 +337,7 @@ function SelectedTransactionsFloatingActionBar({
   const navigate = useNavigate();
   const { data: accounts = [] } = useAccounts();
   const accountsById = useMemo(() => groupById(accounts), [accounts]);
+  const [defaultCurrencyCode] = useSyncedPref('defaultCurrencyCode');
 
   const { data: payees = [] } = usePayees();
   const payeesById = useMemo(() => groupById(payees), [payees]);
@@ -378,8 +380,11 @@ function SelectedTransactionsFloatingActionBar({
       return false;
     }
     const [fromTrans, toTrans] = twoTransactions;
-    return validForTransfer(fromTrans, toTrans);
-  }, [twoTransactions]);
+    return validForTransfer(fromTrans, toTrans, {
+      accounts,
+      defaultCurrencyCode: defaultCurrencyCode || '',
+    });
+  }, [accounts, defaultCurrencyCode, twoTransactions]);
 
   const canMerge = useMemo(() => {
     return Boolean(

@@ -120,6 +120,7 @@ import type {
   OnDragChangeCallback,
   OnDropCallback,
 } from '#hooks/useDragDrop';
+import { useFormat } from '#hooks/useFormat';
 import { useLocalPref } from '#hooks/useLocalPref';
 import { useMergedRefs } from '#hooks/useMergedRefs';
 import { usePrevious } from '#hooks/usePrevious';
@@ -1155,6 +1156,8 @@ const Transaction = memo(function Transaction({
     payee: payeeId,
     imported_payee: importedPayee,
     notes,
+    exchange_rate: exchangeRate,
+    budget_amount: budgetAmount,
     date,
     account: accountId,
     category: categoryId,
@@ -1592,6 +1595,8 @@ const Transaction = memo(function Transaction({
 
         <NotesCell
           note={notes ?? ''}
+          exchangeRate={exchangeRate}
+          budgetAmount={budgetAmount}
           scheduleNote={isPreview ? schedule?.name : null}
           focused={focusedField === 'notes'}
           valueStyle={valueStyle}
@@ -1970,6 +1975,8 @@ const Transaction = memo(function Transaction({
 
 type NotesCellProps = {
   note: string;
+  exchangeRate?: number | null;
+  budgetAmount?: number | null;
   scheduleNote: string | null | undefined;
   focused: boolean;
   valueStyle: CSSProperties | null;
@@ -1980,6 +1987,8 @@ type NotesCellProps = {
 
 function NotesCell({
   note,
+  exchangeRate,
+  budgetAmount,
   scheduleNote,
   focused,
   valueStyle,
@@ -1987,6 +1996,7 @@ function NotesCell({
   onClickTag,
   onExpose,
 }: NotesCellProps) {
+  const format = useFormat();
   const [inputValue, setInputValue] = useState(note);
   useEffect(() => {
     setInputValue(note);
@@ -2001,6 +2011,12 @@ function NotesCell({
   }
 
   const displayedNote = note || scheduleNote || '';
+  const exchangeRateLabel =
+    exchangeRate != null ? `FX: ${exchangeRate}` : null;
+  const budgetAmountLabel =
+    budgetAmount != null
+      ? `Budget: ${format(budgetAmount, 'financial')}`
+      : null;
 
   return (
     <CustomCell
@@ -2008,9 +2024,33 @@ function NotesCell({
       name="notes"
       value={displayedNote}
       valueStyle={valueStyle}
-      formatter={value =>
-        NotesTagFormatter({ notes: value, onNotesTagClick: onClickTag })
-      }
+      formatter={value => (
+        <View style={{ flexDirection: 'column', minWidth: 0 }}>
+          {NotesTagFormatter({ notes: value, onNotesTagClick: onClickTag })}
+          {exchangeRateLabel && !focused && (
+            <Text
+              style={{
+                fontSize: 11,
+                color: theme.pageTextSubdued,
+                marginTop: 2,
+              }}
+            >
+              {exchangeRateLabel}
+            </Text>
+          )}
+          {budgetAmountLabel && !focused && (
+            <Text
+              style={{
+                fontSize: 11,
+                color: theme.pageTextSubdued,
+                marginTop: 2,
+              }}
+            >
+              {budgetAmountLabel}
+            </Text>
+          )}
+        </View>
+      )}
       focused={focused}
       exposed={focused}
       onExpose={onExpose}

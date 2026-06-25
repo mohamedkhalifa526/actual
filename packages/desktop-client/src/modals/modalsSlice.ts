@@ -492,6 +492,29 @@ export type Modal =
       };
     }
   | {
+      name: 'transfer-exchange-rate';
+      options: {
+        fromCurrency: string;
+        toCurrency: string;
+        sourceAmount: number;
+        defaultRate?: number;
+        onSubmit: (exchangeRate: number) => void;
+        onCancel?: () => void;
+      };
+    }
+  | {
+      name: 'budget-currency';
+      options: {
+        accountCurrency: string;
+        mainCurrency: string;
+        sourceAmount: number;
+        defaultBudgetAmount?: number | null;
+        defaultRate?: number;
+        onSubmit: (budgetAmount: number) => void;
+        onCancel?: () => void;
+      };
+    }
+  | {
       name: 'transfer';
       options: {
         title: string;

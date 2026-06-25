@@ -171,6 +171,35 @@ describe('Transfer', () => {
     differ.expectToMatchDiff(await getAllTransactions());
   });
 
+  test('cross-currency transfers use exchange rate', async () => {
+    await prepareDatabase();
+    await db.insert('preferences', {
+      id: 'defaultCurrencyCode',
+      value: 'USD',
+    });
+    await db.updateAccount({ id: 'one', currency: 'EUR' });
+
+    const transferTwo = await db.first<db.DbPayee>(
+      "SELECT * FROM payees WHERE transfer_acct = 'two'",
+    );
+
+    let transaction = {
+      account: 'one',
+      amount: -10000,
+      payee: transferTwo.id,
+      date: '2017-01-01',
+      exchange_rate: 1.08,
+    };
+    transaction.id = await db.insertTransaction(transaction);
+    await transfer.onInsert(transaction);
+
+    transaction = await db.getTransaction(transaction.id);
+    const counterpart = await db.getTransaction(transaction.transfer_id);
+    expect(counterpart.amount).toBe(10800);
+    expect(counterpart.exchange_rate).toBe(1.08);
+    expect(transaction.exchange_rate).toBe(1.08);
+  });
+
   test('split transfers are retained on child transactions', async () => {
     // test: first add a txn having a transfer acct payee
     // then mark it as `is_parent` and add a child txn

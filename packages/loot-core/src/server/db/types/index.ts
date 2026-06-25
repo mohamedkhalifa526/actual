@@ -35,6 +35,7 @@ export type DbAccount = {
     | 'timed-out'
     | 'account-missing'
     | null;
+  currency?: string | null;
 };
 
 export type DbBank = {
@@ -189,6 +190,8 @@ export type DbTransaction = {
   tombstone: 1 | 0;
   cleared: 1 | 0;
   reconciled: 1 | 0;
+  exchange_rate?: number | null;
+  budget_amount?: number | null;
   // Unused in the codebase
   pending?: 1 | 0 | null;
   location?: string | null;
@@ -298,6 +301,8 @@ export type DbViewTransactionInternal = {
   cleared: DbTransaction['cleared'];
   tombstone: DbTransaction['tombstone'];
   reconciled: DbTransaction['reconciled'];
+  exchange_rate: DbTransaction['exchange_rate'] | null;
+  budget_amount: DbTransaction['budget_amount'] | null;
 };
 
 export type DbViewTransactionInternalAlive = DbViewTransactionInternal;

@@ -6,6 +6,7 @@ import { resolveName } from '#server/spreadsheet/util';
 import * as monthUtils from '#shared/months';
 import { q } from '#shared/query';
 import { getChangedValues } from '#shared/util';
+import { budgetAmountSqlExpression } from '#shared/currency-transfer';
 import type { CategoryGroupEntity } from '#types/models';
 
 import * as budgetActions from './actions';
@@ -52,7 +53,7 @@ function getSumAmountsByMonth(
   const rows = db.runQuery<{ month: number; category: string; amount: number }>(
     `SELECT t.category AS category,
             t.date / 100 AS month,
-            SUM(t.amount) AS amount
+            SUM(${budgetAmountSqlExpression}) AS amount
        FROM v_transactions_internal_alive t
        LEFT JOIN accounts a ON a.id = t.account
       WHERE t.date >= ${rangeStart} AND t.date <= ${rangeEnd}
@@ -76,7 +77,7 @@ export function createCategory(cat, sheetName, prevSheetName, start, end) {
     run: () => {
       // Making this sync is faster!
       const rows = db.runQuery<{ amount: number }>(
-        `SELECT SUM(amount) as amount FROM v_transactions_internal_alive t
+        `SELECT SUM(${budgetAmountSqlExpression}) as amount FROM v_transactions_internal_alive t
            LEFT JOIN accounts a ON a.id = t.account
          WHERE t.date >= ${start} AND t.date <= ${end}
            AND category = '${cat.id}' AND a.offbudget = 0`,

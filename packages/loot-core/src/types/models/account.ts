@@ -22,6 +22,8 @@ export type AccountEntity = {
   account_sync_source: AccountSyncSource | null;
   last_sync: string | null;
   bank_sync_status: BankSyncStatus | null;
+  /** ISO 4217 code. When unset, the budget default currency is used. */
+  currency?: string | null;
 };
 
 export type AccountSyncSource = BankSyncProviders;

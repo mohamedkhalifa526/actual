@@ -48,6 +48,8 @@ export const schema = {
     imported_payee: f('string'),
     starting_balance_flag: f('boolean'),
     transfer_id: f('id'),
+    exchange_rate: f('float'),
+    budget_amount: f('integer'),
     sort_order: f('float', { default: () => Date.now() }),
     cleared: f('boolean', { default: true }),
     reconciled: f('boolean', { default: false }),
@@ -78,6 +80,7 @@ export const schema = {
     last_reconciled: f('string'),
     last_sync: f('string'),
     bank_sync_status: f('string'),
+    currency: f('string'),
   },
   categories: {
     id: f('id'),

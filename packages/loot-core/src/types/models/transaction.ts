@@ -20,6 +20,10 @@ export type TransactionEntity = {
   imported_payee?: string;
   starting_balance_flag?: boolean;
   transfer_id?: TransactionEntity['id'];
+  /** FX rate from this account's currency to the transfer account's currency. */
+  exchange_rate?: number | null;
+  /** Amount in the budget (main) currency; used for budget totals when set. */
+  budget_amount?: IntegerAmount | null;
   sort_order?: number;
   cleared?: boolean;
   reconciled?: boolean;

@@ -23,6 +23,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '#components/common/Modal';
+import { AccountCurrencySelect } from '#components/accounts/AccountCurrencySelect';
 import { Checkbox } from '#components/forms';
 import { validateAccountName } from '#components/util/accountValidation';
 import { useAccounts } from '#hooks/useAccounts';
@@ -38,6 +39,7 @@ export function CreateLocalAccountModal() {
   const [name, setName] = useState('');
   const [offbudget, setOffbudget] = useState(false);
   const [balance, setBalance] = useState('0');
+  const [currency, setCurrency] = useState('');
 
   const [nameError, setNameError] = useState(null);
   const [balanceError, setBalanceError] = useState(false);
@@ -70,6 +72,7 @@ export function CreateLocalAccountModal() {
           name,
           balance: toRelaxedNumber(balance),
           offBudget: offbudget,
+          currency: currency || null,
         },
         {
           onSuccess: id => {
@@ -109,6 +112,38 @@ export function CreateLocalAccountModal() {
               {nameError && (
                 <FormError style={{ marginLeft: 75, color: theme.warningText }}>
                   {nameError}
+                </FormError>
+              )}
+
+              <InlineField label={t('Currency')} width="100%">
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <AccountCurrencySelect
+                    value={currency}
+                    onChange={setCurrency}
+                    style={{ width: '100%' }}
+                  />
+                </View>
+              </InlineField>
+
+              <InlineField label={t('Balance')} width="100%">
+                <Input
+                  name="balance"
+                  inputMode="decimal"
+                  value={balance}
+                  onChangeValue={setBalance}
+                  onUpdate={value => {
+                    const balance = value.trim();
+                    setBalance(balance);
+                    if (validateBalance(balance) && balanceError) {
+                      setBalanceError(false);
+                    }
+                  }}
+                  style={{ flex: 1 }}
+                />
+              </InlineField>
+              {balanceError && (
+                <FormError style={{ marginLeft: 75 }}>
+                  <Trans>Balance must be a number</Trans>
                 </FormError>
               )}
 
@@ -166,28 +201,6 @@ export function CreateLocalAccountModal() {
                   </div>
                 </View>
               </View>
-
-              <InlineField label={t('Balance')} width="100%">
-                <Input
-                  name="balance"
-                  inputMode="decimal"
-                  value={balance}
-                  onChangeValue={setBalance}
-                  onUpdate={value => {
-                    const balance = value.trim();
-                    setBalance(balance);
-                    if (validateBalance(balance) && balanceError) {
-                      setBalanceError(false);
-                    }
-                  }}
-                  style={{ flex: 1 }}
-                />
-              </InlineField>
-              {balanceError && (
-                <FormError style={{ marginLeft: 75 }}>
-                  <Trans>Balance must be a number</Trans>
-                </FormError>
-              )}
 
               <ModalButtons>
                 <Button onPress={() => state.close()}>

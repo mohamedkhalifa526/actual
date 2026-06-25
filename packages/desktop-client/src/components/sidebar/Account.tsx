@@ -233,6 +233,36 @@ export function Account<FieldName extends SheetFields<'account'>>({
                       defaultValue={name}
                     />
                   </InitialFocus>
+                ) : account?.currency ? (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'baseline',
+                      gap: 5,
+                      minWidth: 0,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <span
+                      style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {name}
+                    </span>
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        lineHeight: 1,
+                        color: theme.pageTextSubdued,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {account.currency}
+                    </Text>
+                  </View>
                 ) : (
                   name
                 )
@@ -320,13 +350,25 @@ export function Account<FieldName extends SheetFields<'account'>>({
               },
             }}
           >
-            <Text
+            <View
               style={{
-                fontWeight: 'bold',
+                flexDirection: 'row',
+                alignItems: 'baseline',
+                gap: 6,
               }}
             >
-              {name}
-            </Text>
+              <Text style={{ fontWeight: 'bold' }}>{name}</Text>
+              {account?.currency ? (
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: theme.pageTextSubdued,
+                  }}
+                >
+                  {account.currency}
+                </Text>
+              ) : null}
+            </View>
             <Button
               aria-label={t('Toggle balance history')}
               variant="bare"

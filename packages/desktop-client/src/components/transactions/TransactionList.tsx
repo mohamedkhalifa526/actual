@@ -42,6 +42,7 @@ import { addNotification } from '#notifications/notificationsSlice';
 import { useDispatch } from '#redux';
 
 import { shouldApplyRuleChange } from './table/utils';
+import { prepareForeignCurrencyTransaction } from './budgetCurrency';
 import { TransactionTable } from './TransactionsTable';
 import type { TransactionTableProps } from './TransactionsTable';
 // When data changes, there are two ways to update the UI:
@@ -334,6 +335,7 @@ export function TransactionList({
   const navigate = useNavigate();
   const [learnCategories = 'true'] = useSyncedPref('learn-categories');
   const isLearnCategoriesEnabled = String(learnCategories) === 'true';
+  const [defaultCurrencyCode] = useSyncedPref('defaultCurrencyCode');
   const [upcomingLength = '7'] = useSyncedPref(
     'upcomingScheduledTransactionLength',
   );
@@ -388,6 +390,23 @@ export function TransactionList({
     async (newTransactions: TransactionEntity[]) => {
       newTransactions = realizeTempTransactions(newTransactions);
 
+      const parentIndex = newTransactions.findIndex(t => !t.is_child);
+      if (parentIndex !== -1) {
+        try {
+          newTransactions[parentIndex] = await prepareForeignCurrencyTransaction(
+            newTransactions[parentIndex],
+            {
+              dispatch,
+              accounts,
+              payees,
+              defaultCurrencyCode: defaultCurrencyCode || '',
+            },
+          );
+        } catch {
+          return;
+        }
+      }
+
       const parentTransaction = newTransactions.find(t => !t.is_child);
       const isLinkedToSchedule = !!parentTransaction?.schedule;
 
@@ -423,15 +442,15 @@ export function TransactionList({
       await saveDiff({ added: newTransactions }, isLearnCategoriesEnabled);
       onRefetch();
     },
-    [isLearnCategoriesEnabled, onRefetch, promptToConvertToSchedule],
+    [accounts, defaultCurrencyCode, dispatch, isLearnCategoriesEnabled, onRefetch, payees, promptToConvertToSchedule],
   );
 
   const onSave = useCallback(
     async (transaction: TransactionEntity) => {
-      const saveTransaction = async () => {
+      const saveTransaction = async (transactionToSave: TransactionEntity) => {
         const changes = updateTransaction(
           transactionsLatest.current,
-          transaction,
+          transactionToSave,
         );
         transactionsLatest.current = changes.data;
 
@@ -471,15 +490,52 @@ export function TransactionList({
 
               await createSingleTimeScheduleFromTransaction(transaction);
             },
-            saveTransaction,
+            async () => {
+              try {
+                const transactionToSave = await prepareForeignCurrencyTransaction(
+                  transaction,
+                  {
+                    dispatch,
+                    accounts,
+                    payees,
+                    defaultCurrencyCode: defaultCurrencyCode || '',
+                  },
+                );
+                await saveTransaction(transactionToSave);
+              } catch {
+                // User cancelled the exchange rate modal.
+              }
+            },
           );
           return;
         }
       }
 
-      await saveTransaction();
+      try {
+        const transactionToSave = await prepareForeignCurrencyTransaction(
+          transaction,
+          {
+            dispatch,
+            accounts,
+            payees,
+            defaultCurrencyCode: defaultCurrencyCode || '',
+          },
+        );
+        await saveTransaction(transactionToSave);
+      } catch {
+        // User cancelled the exchange rate modal.
+      }
     },
-    [isLearnCategoriesEnabled, onChange, onRefetch, promptToConvertToSchedule],
+    [
+      accounts,
+      defaultCurrencyCode,
+      dispatch,
+      isLearnCategoriesEnabled,
+      onChange,
+      onRefetch,
+      payees,
+      promptToConvertToSchedule,
+    ],
   );
 
   const onAddSplit = useCallback(

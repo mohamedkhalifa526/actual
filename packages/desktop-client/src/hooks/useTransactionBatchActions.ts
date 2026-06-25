@@ -10,7 +10,7 @@ import {
   ungroupTransactions,
   updateTransaction,
 } from '@actual-app/core/shared/transactions';
-import { validForTransfer } from '@actual-app/core/shared/transfer';
+import { validForTransfer, getTransferExchangeRate } from '@actual-app/core/shared/transfer';
 import { applyChanges, applyFindReplace } from '@actual-app/core/shared/util';
 import type { Diff } from '@actual-app/core/shared/util';
 import type {
@@ -26,6 +26,8 @@ import type {
   Modal as ModalType,
 } from '#modals/modalsSlice';
 import { aqlQuery } from '#queries/aqlQuery';
+import { useAccounts } from '#hooks/useAccounts';
+import { useSyncedPref } from '#hooks/useSyncedPref';
 import { useDispatch } from '#redux';
 
 type BatchReconciledReason = Extract<
@@ -78,6 +80,8 @@ type BatchUnlinkScheduleProps = {
 export function useTransactionBatchActions() {
   const dispatch = useDispatch();
   const { t } = useTranslation();
+  const { data: accounts = [] } = useAccounts();
+  const [defaultCurrencyCode] = useSyncedPref('defaultCurrencyCode');
 
   const onBatchEdit = async ({ name, ids, onSuccess }: BatchEditProps) => {
     const { data } = await aqlQuery(
@@ -530,11 +534,18 @@ export function useTransactionBatchActions() {
       );
       const [fromTrans, toTrans] = transactions;
 
-      if (transactions.length === 2 && validForTransfer(fromTrans, toTrans)) {
+      if (
+        transactions.length === 2 &&
+        validForTransfer(fromTrans, toTrans, {
+          accounts,
+          defaultCurrencyCode: defaultCurrencyCode || '',
+        })
+      ) {
         const fromPayee = payees.find(
           p => p.transfer_acct === fromTrans.account,
         );
         const toPayee = payees.find(p => p.transfer_acct === toTrans.account);
+        const exchangeRate = getTransferExchangeRate(fromTrans, toTrans);
 
         const changes = {
           updated: [
@@ -543,12 +554,14 @@ export function useTransactionBatchActions() {
               category: null,
               payee: toPayee?.id,
               transfer_id: toTrans.id,
+              exchange_rate: exchangeRate,
             },
             {
               ...toTrans,
               category: null,
               payee: fromPayee?.id,
               transfer_id: fromTrans.id,
+              exchange_rate: exchangeRate,
             },
           ],
           runTransfers: false,
