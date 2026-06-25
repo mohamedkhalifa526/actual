@@ -33,7 +33,6 @@ type BalanceMenuProps = Omit<
   ) => void;
   onMakeAsNonSplitTransactions: (ids: string[]) => void;
   onEditBudgetAmount?: () => void;
-  onEditTransferExchangeRate?: () => void;
   closeMenu: () => void;
 };
 
@@ -48,7 +47,6 @@ export function TransactionMenu({
   onScheduleAction,
   onMakeAsNonSplitTransactions,
   onEditBudgetAmount,
-  onEditTransferExchangeRate,
   closeMenu,
   ...props
 }: BalanceMenuProps) {
@@ -193,9 +191,6 @@ export function TransactionMenu({
           case 'edit-budget-amount':
             onEditBudgetAmount?.();
             break;
-          case 'edit-exchange-rate':
-            onEditTransferExchangeRate?.();
-            break;
           default:
             throw new Error(`Unrecognized menu option: ${name}`);
         }
@@ -225,14 +220,6 @@ export function TransactionMenu({
                     {
                       name: 'edit-budget-amount',
                       text: t('Edit budget amount'),
-                    },
-                  ]
-                : []),
-              ...(onEditTransferExchangeRate && selectedIds.length === 1
-                ? [
-                    {
-                      name: 'edit-exchange-rate',
-                      text: t('Edit exchange rate'),
                     },
                   ]
                 : []),

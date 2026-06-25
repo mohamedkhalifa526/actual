@@ -158,7 +158,7 @@ import type {
   TransactionEditFunction,
   TransactionUpdateFunction,
 } from './table/utils';
-import { canEditTransferExchangeRate } from './transferExchangeRate';
+import { canEditTransferExchangeRate, resolveTransferAccount } from './transferExchangeRate';
 import { TransactionMenu } from './TransactionMenu';
 
 type TransactionHeaderProps = {
@@ -1202,7 +1202,13 @@ const Transaction = memo(function Transaction({
   const transferAcct =
     isTemporaryId(id) && payee?.transfer_acct
       ? getAccountsById(accounts)[payee.transfer_acct]
-      : transferAccountsByTransaction[id];
+      : transferAccountsByTransaction[id] ??
+        resolveTransferAccount(
+          originalTransaction,
+          accounts,
+          payees,
+          allTransactions ?? [],
+        );
   const isBudgetTransfer = transferAcct && transferAcct.offbudget === 0;
   const isOffBudget = account && account.offbudget === 1;
 
@@ -1214,7 +1220,7 @@ const Transaction = memo(function Transaction({
     !isChild &&
     !!onEditBudgetAmount &&
     canEditTransactionBudgetAmount(
-      transaction,
+      originalTransaction,
       account,
       transferAcct,
       mainCurrency,
@@ -1452,13 +1458,12 @@ const Transaction = memo(function Transaction({
               onMakeAsNonSplitTransactions?.(ids)
             }
             onEditBudgetAmount={
-              canEditBudget
-                ? () => onEditBudgetAmount?.(deserializeTransaction(transaction, originalTransaction))
-                : undefined
-            }
-            onEditTransferExchangeRate={
-              canEditFx
-                ? () => onEditTransferExchangeRate?.(deserializeTransaction(transaction, originalTransaction))
+              canEditBudget && onEditBudgetAmount
+                ? () => {
+                    queueMicrotask(() => {
+                      onEditBudgetAmount(originalTransaction);
+                    });
+                  }
                 : undefined
             }
             closeMenu={() => setMenuOpen(false)}
@@ -1679,17 +1684,12 @@ const Transaction = memo(function Transaction({
           onEditExchangeRate={
             canEditFx
               ? () =>
-                  onEditTransferExchangeRate?.(
-                    deserializeTransaction(transaction, originalTransaction),
-                  )
+                  onEditTransferExchangeRate?.(originalTransaction)
               : undefined
           }
           onEditBudgetAmount={
             canEditBudget
-              ? () =>
-                  onEditBudgetAmount?.(
-                    deserializeTransaction(transaction, originalTransaction),
-                  )
+              ? () => onEditBudgetAmount?.(originalTransaction)
               : undefined
           }
           onExpose={name => !isPreview && onEdit(id, name)}

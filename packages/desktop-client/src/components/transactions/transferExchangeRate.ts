@@ -33,6 +33,28 @@ export function getTransferAccountId(
   return payees.find(p => p.id === payeeId)?.transfer_acct ?? null;
 }
 
+export function resolveTransferAccount(
+  transaction: TransactionEntity,
+  accounts: AccountEntity[],
+  payees: PayeeEntity[],
+  allTransactions: TransactionEntity[],
+): AccountEntity | undefined {
+  const transferAccountId = getTransferAccountId(transaction.payee, payees);
+  if (transferAccountId) {
+    return accounts.find(a => a.id === transferAccountId);
+  }
+
+  const counterparty = transaction.transfer_id
+    ? allTransactions.find(t => t.id === transaction.transfer_id)
+    : allTransactions.find(t => t.transfer_id === transaction.id);
+
+  if (counterparty) {
+    return accounts.find(a => a.id === counterparty.account);
+  }
+
+  return undefined;
+}
+
 export function promptTransferExchangeRate({
   dispatch,
   fromAccount,
@@ -133,13 +155,13 @@ export async function editTransferExchangeRate(
     allTransactions: TransactionEntity[];
   },
 ): Promise<TransactionEntity[]> {
-  const transferAccountId = getTransferAccountId(transaction.payee, payees);
-  if (!transferAccountId) {
-    return [transaction];
-  }
-
   const fromAccount = accounts.find(a => a.id === transaction.account);
-  const toAccount = accounts.find(a => a.id === transferAccountId);
+  const toAccount = resolveTransferAccount(
+    transaction,
+    accounts,
+    payees,
+    allTransactions,
+  );
 
   if (!canEditTransferExchangeRate(fromAccount, toAccount, defaultCurrencyCode)) {
     return [transaction];
