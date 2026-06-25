@@ -19,6 +19,11 @@ import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { Tooltip } from '@actual-app/components/tooltip';
 import { View } from '@actual-app/components/view';
+import {
+  getAccountCurrency,
+  isForeignCurrencyAccount,
+} from '@actual-app/core/shared/currency-transfer';
+import { getCurrency } from '@actual-app/core/shared/currencies';
 import type { AccountEntity } from '@actual-app/core/types/models';
 import { css, cx } from '@emotion/css';
 
@@ -28,9 +33,10 @@ import { Link } from '#components/common/Link';
 import { Notes } from '#components/Notes';
 import { DropHighlight, useDraggable, useDroppable } from '#components/sort';
 import type { OnDragChangeCallback, OnDropCallback } from '#components/sort';
-import { CellValue } from '#components/spreadsheet/CellValue';
+import { CellValue, CellValueText } from '#components/spreadsheet/CellValue';
 import { useContextMenu } from '#hooks/useContextMenu';
 import { useDragRef } from '#hooks/useDragRef';
+import { useFormat } from '#hooks/useFormat';
 import { useIsTestEnv } from '#hooks/useIsTestEnv';
 import { useNotes } from '#hooks/useNotes';
 import { useSyncedPref } from '#hooks/useSyncedPref';
@@ -117,6 +123,12 @@ export function Account<FieldName extends SheetFields<'account'>>({
   const [showBalanceHistory, setShowBalanceHistory] = useSyncedPref(
     `side-nav.show-balance-history-${account?.id}`,
   );
+  const [defaultCurrencyCode] = useSyncedPref('defaultCurrencyCode');
+  const format = useFormat();
+  const mainCurrency = defaultCurrencyCode || '';
+  const accountCurrencyCode = getAccountCurrency(account, mainCurrency);
+  const isForeignAccount = isForeignCurrencyAccount(account, mainCurrency);
+  const accountCurrency = getCurrency(accountCurrencyCode);
 
   const dispatch = useDispatch();
 
@@ -130,7 +142,22 @@ export function Account<FieldName extends SheetFields<'account'>>({
   const reopenAccount = useReopenAccountMutation();
   const updateAccount = useUpdateAccountMutation();
 
-  const balanceCell = <CellValue binding={query} type="financial" />;
+  const balanceCell = (
+    <CellValue binding={query} type="financial">
+      {({ value, type, name }) => (
+        <CellValueText
+          name={name}
+          value={value}
+          type={type}
+          formatter={
+            isForeignAccount
+              ? format.forCurrency(accountCurrencyCode)
+              : undefined
+          }
+        />
+      )}
+    </CellValue>
+  );
 
   const accountRow = (
     <View
@@ -232,8 +259,8 @@ export function Account<FieldName extends SheetFields<'account'>>({
                       onEscape={() => setIsEditing(false)}
                       defaultValue={name}
                     />
-                  </InitialFocus>
-                ) : account?.currency ? (
+                    </InitialFocus>
+                ) : isForeignAccount ? (
                   <View
                     style={{
                       flexDirection: 'row',
@@ -260,7 +287,7 @@ export function Account<FieldName extends SheetFields<'account'>>({
                         flexShrink: 0,
                       }}
                     >
-                      {account.currency}
+                      {accountCurrency.symbol || accountCurrencyCode}
                     </Text>
                   </View>
                 ) : (
@@ -358,14 +385,14 @@ export function Account<FieldName extends SheetFields<'account'>>({
               }}
             >
               <Text style={{ fontWeight: 'bold' }}>{name}</Text>
-              {account?.currency ? (
+              {isForeignAccount ? (
                 <Text
                   style={{
                     fontSize: 11,
                     color: theme.pageTextSubdued,
                   }}
                 >
-                  {account.currency}
+                  {accountCurrency.symbol || accountCurrencyCode}
                 </Text>
               ) : null}
             </View>

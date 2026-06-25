@@ -26,6 +26,7 @@ export type FormatType =
 
 export type UseFormatResult = {
   (value: unknown, type?: FormatType): string;
+  forCurrency: (currencyCode: string) => (value: unknown, type?: FormatType) => string;
   forEdit: (value: IntegerAmount) => string;
   fromEdit: (
     value: string,
@@ -163,8 +164,12 @@ export function useFormat(): UseFormatResult {
     [symbolPositionPref, spaceEnabledPref],
   );
 
-  const formatDisplay = useCallback(
-    (value: unknown, type: FormatType = 'string'): string => {
+  const formatDisplayForCurrency = useCallback(
+    (
+      currency: Currency,
+      value: unknown,
+      type: FormatType = 'string',
+    ): string => {
       const isFinancialType =
         type === 'financial' ||
         type === 'financial-with-sign' ||
@@ -176,7 +181,7 @@ export function useFormat(): UseFormatResult {
         if (type === 'financial-no-decimals' || hideFractionPref === 'true') {
           displayDecimalPlaces = 0;
         } else {
-          displayDecimalPlaces = activeCurrency.decimalPlaces;
+          displayDecimalPlaces = currency.decimalPlaces;
         }
       }
 
@@ -189,15 +194,12 @@ export function useFormat(): UseFormatResult {
         value,
         type,
         intlFormatter,
-        activeCurrency.decimalPlaces,
+        currency.decimalPlaces,
       );
 
       let styledValue = formattedString;
-      if (isFinancialType && activeCurrency && activeCurrency.code !== '') {
-        styledValue = applyCurrencyStyling(
-          formattedString,
-          activeCurrency.symbol,
-        );
+      if (isFinancialType && currency.code !== '') {
+        styledValue = applyCurrencyStyling(formattedString, currency.symbol);
       }
 
       if (
@@ -209,12 +211,23 @@ export function useFormat(): UseFormatResult {
       }
       return styledValue;
     },
-    [
-      activeCurrency,
-      numberFormatConfig,
-      applyCurrencyStyling,
-      hideFractionPref,
-    ],
+    [numberFormatConfig, applyCurrencyStyling, hideFractionPref],
+  );
+
+  const formatDisplay = useCallback(
+    (value: unknown, type: FormatType = 'string'): string => {
+      return formatDisplayForCurrency(activeCurrency, value, type);
+    },
+    [activeCurrency, formatDisplayForCurrency],
+  );
+
+  const forCurrency = useCallback(
+    (currencyCode: string) => {
+      const currency = getCurrency(currencyCode);
+      return (value: unknown, type: FormatType = 'string') =>
+        formatDisplayForCurrency(currency, value, type);
+    },
+    [formatDisplayForCurrency],
   );
 
   const toAmount = useCallback(
@@ -280,6 +293,7 @@ export function useFormat(): UseFormatResult {
   );
 
   return Object.assign(formatDisplay, {
+    forCurrency,
     forEdit,
     fromEdit,
     currency: activeCurrency,
