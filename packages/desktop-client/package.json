@@ -28,6 +28,8 @@
     "#undo": "./src/undo/index.ts",
     "#global-events": "./src/global-events.ts",
     "#enablebanking": "./src/enablebanking.ts",
+    "#exchange-rates": "./src/exchange-rates/index.ts",
+    "#exchange-rates/*": "./src/exchange-rates/*.ts",
     "#gocardless": "./src/gocardless.ts",
     "#i18n": "./src/i18n.ts",
     "#mocks": "./src/mocks.tsx",

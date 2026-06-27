@@ -30,6 +30,7 @@ export type SyncedPrefs = Partial<
     | 'currencySpaceBetweenAmountAndSymbol'
     | 'defaultCurrencyCode'
     | 'currencyExchangeRates'
+    | 'exchangeRateApiKey'
     | `show-account-${string}-net-worth-chart`
     | `side-nav.show-balance-history-${string}`
     | `show-balances-${string}`

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
-import { Button } from '@actual-app/components/button';
+import { Button, ButtonWithLoading } from '@actual-app/components/button';
 import { Input } from '@actual-app/components/input';
 import { Select } from '@actual-app/components/select';
 import { Text } from '@actual-app/components/text';
@@ -17,7 +17,9 @@ import {
 import { css } from '@emotion/css';
 
 import { ExchangeRateInput } from '#components/util/ExchangeRateInput';
+import { Link } from '#components/common/Link';
 import { useCurrencyExchangeRates } from '#hooks/useCurrencyExchangeRates';
+import { useExchangeRateRefresh } from '#hooks/useExchangeRateRefresh';
 
 import { Column } from './UI';
 
@@ -30,6 +32,8 @@ export function CurrencyExchangeRatesSettings({
 }: CurrencyExchangeRatesProps) {
   const { t } = useTranslation();
   const { rates, setRates } = useCurrencyExchangeRates();
+  const { apiKey, setApiKey, refreshRates, isRefreshing } =
+    useExchangeRateRefresh(mainCurrencyCode);
   const [newCurrency, setNewCurrency] = useState('');
   const [newRate, setNewRate] = useState('1.0000');
 
@@ -80,6 +84,49 @@ export function CurrencyExchangeRatesSettings({
             and account summaries.
           </Trans>
         </Text>
+
+        <View style={{ marginBottom: 12 }}>
+          <Text style={{ marginBottom: 4, fontSize: 13 }}>
+            <Trans>ExchangeRate-API key</Trans>
+          </Text>
+          <Input
+            value={apiKey}
+            onChangeValue={setApiKey}
+            placeholder={t('Enter your API key')}
+            style={{ width: '100%' }}
+          />
+          <Text
+            style={{
+              color: theme.pageTextSubdued,
+              fontSize: 12,
+              marginTop: 6,
+            }}
+          >
+            <Trans>
+              Used to fetch live rates from ExchangeRate-API. Get a free key at{' '}
+              <Link
+                variant="external"
+                to="https://www.exchangerate-api.com/"
+                linkColor="muted"
+              >
+                exchangerate-api.com
+              </Link>
+              .
+            </Trans>
+          </Text>
+        </View>
+
+        {foreignCurrencies.length > 0 && (
+          <View style={{ marginBottom: 12 }}>
+            <ButtonWithLoading
+              isLoading={isRefreshing}
+              onPress={() => void refreshRates()}
+              isDisabled={!apiKey.trim()}
+            >
+              <Trans>Refresh exchange rates</Trans>
+            </ButtonWithLoading>
+          </View>
+        )}
 
         {foreignCurrencies.length === 0 ? (
           <Text style={{ color: theme.pageTextSubdued, fontSize: 13 }}>

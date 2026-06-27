@@ -211,6 +211,38 @@ export function serializeCurrencyExchangeRates(
   return JSON.stringify(normalized);
 }
 
+/**
+ * Convert provider rates in "1 base = X quote" form to Actual's
+ * "1 quote = Y base" exchange rates used in {@link CurrencyExchangeRates}.
+ */
+export function convertRatesFromBaseConversion(
+  conversionRates: Record<string, number>,
+  baseCurrency: string,
+  targetCurrencies: string[],
+): CurrencyExchangeRates {
+  const base = baseCurrency.trim().toUpperCase();
+  const rates: CurrencyExchangeRates = {};
+
+  for (const code of targetCurrencies) {
+    const currency = code.trim().toUpperCase();
+    if (!currency || currency === base) {
+      continue;
+    }
+
+    const apiRate = conversionRates[currency];
+    if (apiRate == null || apiRate <= 0) {
+      continue;
+    }
+
+    const rate = normalizeExchangeRate(1 / apiRate);
+    if (rate != null) {
+      rates[currency] = rate;
+    }
+  }
+
+  return rates;
+}
+
 export function getExchangeRateToMain(
   currencyCode: string,
   mainCurrencyCode: string,

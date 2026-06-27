@@ -5,6 +5,7 @@ import {
   computeCounterpartyAmount,
   computeExchangeRate,
   computeExchangeRateToMain,
+  convertRatesFromBaseConversion,
   getAccountCurrency,
   getBudgetAmountForTransferLeg,
   getAllowedAccountCurrencies,
@@ -61,6 +62,19 @@ describe('currency-transfer', () => {
     expect(
       getBudgetAmountForTransferLeg(10800, 'USD', -10000, 'EUR', 'USD', 1.08),
     ).toBeNull();
+  });
+
+  it('converts provider base rates to budget exchange rates', () => {
+    expect(
+      convertRatesFromBaseConversion(
+        { USD: 1, EUR: 0.8778, GBP: 0.7573 },
+        'USD',
+        ['EUR', 'GBP'],
+      ),
+    ).toEqual({
+      EUR: 1.1392,
+      GBP: 1.3205,
+    });
   });
 
   it('decides when budget amount prompt is needed', () => {
