@@ -1,9 +1,9 @@
 import {
   getAccountCurrency,
   getTransferExchangeRate,
+  getCanonicalTransferExchangeRate,
+  getTransferExchangeRateForLeg,
   isCrossCurrencyTransfer,
-  computeCounterpartyAmount,
-  computeExchangeRate,
   normalizeExchangeRate,
 } from '@actual-app/core/shared/currency-transfer';
 import type { CurrencyExchangeRates } from '@actual-app/core/shared/currency-transfer';
@@ -74,6 +74,7 @@ export function promptTransferExchangeRate({
 }): Promise<number> {
   const fromCurrency = getAccountCurrency(fromAccount, defaultCurrencyCode);
   const toCurrency = getAccountCurrency(toAccount, defaultCurrencyCode);
+  const mainCurrency = defaultCurrencyCode.trim();
 
   return new Promise((resolve, reject) => {
     dispatch(
@@ -83,7 +84,54 @@ export function promptTransferExchangeRate({
           options: {
             fromCurrency,
             toCurrency,
+            mainCurrency,
             sourceAmount,
+            defaultRate,
+            onSubmit: ({ exchangeRate }) => resolve(exchangeRate),
+            onCancel: reject,
+          },
+        },
+      }),
+    );
+  });
+}
+
+export function promptTransferExchangeRateWithCounterparty({
+  dispatch,
+  fromAccount,
+  toAccount,
+  defaultCurrencyCode,
+  sourceAmount,
+  counterpartyAmount,
+  defaultRate = 1,
+}: {
+  dispatch: AppDispatch;
+  fromAccount: AccountEntity | undefined;
+  toAccount: AccountEntity | undefined;
+  defaultCurrencyCode: string;
+  sourceAmount: number;
+  counterpartyAmount?: number;
+  defaultRate?: number;
+}): Promise<{
+  exchangeRate: number;
+  fromAmount: number;
+  toAmount: number;
+}> {
+  const fromCurrency = getAccountCurrency(fromAccount, defaultCurrencyCode);
+  const toCurrency = getAccountCurrency(toAccount, defaultCurrencyCode);
+  const mainCurrency = defaultCurrencyCode.trim();
+
+  return new Promise((resolve, reject) => {
+    dispatch(
+      pushModal({
+        modal: {
+          name: 'transfer-exchange-rate',
+          options: {
+            fromCurrency,
+            toCurrency,
+            mainCurrency,
+            sourceAmount,
+            counterpartyAmount,
             defaultRate,
             onSubmit: resolve,
             onCancel: reject,
@@ -206,30 +254,34 @@ export async function editTransferExchangeRate(
     : allTransactions.find(t => t.transfer_id === transaction.id);
 
   const defaultRate =
-    normalizeExchangeRate(transaction.exchange_rate ?? NaN) ??
     (counterparty
-      ? computeExchangeRate(transaction.amount, counterparty.amount)
+      ? getTransferExchangeRateForLeg(
+          transaction.amount,
+          counterparty.amount,
+        )
       : null) ??
+    normalizeExchangeRate(transaction.exchange_rate ?? NaN) ??
     configuredRate ??
     1;
 
-  const exchangeRate = await promptTransferExchangeRate({
+  const result = await promptTransferExchangeRateWithCounterparty({
     dispatch,
     fromAccount,
     toAccount,
     defaultCurrencyCode,
     sourceAmount: transaction.amount,
+    counterpartyAmount: counterparty?.amount,
     defaultRate,
   });
 
-  const counterpartyAmount = computeCounterpartyAmount(
-    transaction.amount,
-    exchangeRate,
-  );
+  const storedRate =
+    getCanonicalTransferExchangeRate(result.fromAmount, result.toAmount) ??
+    result.exchangeRate;
 
   const updatedTransaction: TransactionEntity = {
     ...transaction,
-    exchange_rate: exchangeRate,
+    amount: result.fromAmount,
+    exchange_rate: storedRate,
   };
 
   if (!counterparty) {
@@ -240,8 +292,8 @@ export async function editTransferExchangeRate(
     updatedTransaction,
     {
       ...counterparty,
-      amount: counterpartyAmount,
-      exchange_rate: exchangeRate,
+      amount: result.toAmount,
+      exchange_rate: storedRate,
     },
   ];
 }

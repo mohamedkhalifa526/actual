@@ -496,9 +496,15 @@ export type Modal =
       options: {
         fromCurrency: string;
         toCurrency: string;
+        mainCurrency: string;
         sourceAmount: number;
+        counterpartyAmount?: number;
         defaultRate?: number;
-        onSubmit: (exchangeRate: number) => void;
+        onSubmit: (result: {
+          exchangeRate: number;
+          fromAmount: number;
+          toAmount: number;
+        }) => void;
         onCancel?: () => void;
       };
     }

@@ -54,6 +54,7 @@ import {
   formatExchangeRate,
   getAccountCurrency,
   getExchangeRateToMain,
+  getTransferExchangeRateForLeg,
 } from '@actual-app/core/shared/currency-transfer';
 import type { CurrencyExchangeRates } from '@actual-app/core/shared/currency-transfer';
 import { q } from '@actual-app/core/shared/query';
@@ -1249,10 +1250,11 @@ const Transaction = memo(function Transaction({
       ? computeBudgetAmount(amount, configuredRate)
       : null);
   const displayExchangeRate =
-    exchangeRate ??
     (canEditFx && counterparty
-      ? computeExchangeRate(amount, counterparty.amount)
-      : null);
+      ? getTransferExchangeRateForLeg(amount, counterparty.amount)
+      : null) ??
+    exchangeRate ??
+    (counterparty ? computeExchangeRate(amount, counterparty.amount) : null);
 
   const valueStyle = added
     ? { fontWeight: 600, color: theme.tableTextItemAdded }

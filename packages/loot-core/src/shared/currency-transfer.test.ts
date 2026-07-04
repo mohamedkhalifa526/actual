@@ -8,9 +8,12 @@ import {
   convertRatesFromBaseConversion,
   getAccountCurrency,
   getBudgetAmountForTransferLeg,
+  getCanonicalTransferExchangeRate,
   getTransferExchangeRate,
+  getTransferExchangeRateForLeg,
   getAllowedAccountCurrencies,
   canEditTransactionBudgetAmount,
+  isCrossCurrencyTransfer,
   isForeignCurrencyAccount,
   needsBudgetAmountForTransaction,
   parseCurrencyExchangeRates,
@@ -44,6 +47,15 @@ describe('currency-transfer', () => {
   it('derives exchange rate from transfer amounts', () => {
     expect(computeExchangeRate(-10000, 10800)).toBe(1.08);
     expect(computeExchangeRate(-10000, -10800)).toBeNull();
+  });
+
+  it('derives leg-specific and canonical transfer exchange rates', () => {
+    // Outflow EGP -10000, inflow EUR +182
+    expect(getTransferExchangeRateForLeg(-10000, 182)).toBe(0.0182);
+    expect(getTransferExchangeRateForLeg(182, -10000)).toBe(54.9451);
+
+    expect(getCanonicalTransferExchangeRate(-10000, 182)).toBe(0.0182);
+    expect(getCanonicalTransferExchangeRate(182, -10000)).toBe(0.0182);
   });
 
   it('converts amounts to budget currency', () => {

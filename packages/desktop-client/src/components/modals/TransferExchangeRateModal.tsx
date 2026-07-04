@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Form } from 'react-aria-components';
 import { Trans, useTranslation } from 'react-i18next';
 
@@ -14,7 +14,6 @@ import {
   computeCounterpartyAmount,
   computeExchangeRate,
   formatExchangeRate,
-  normalizeExchangeRate,
 } from '@actual-app/core/shared/currency-transfer';
 import type { IntegerAmount } from '@actual-app/core/shared/util';
 
@@ -27,7 +26,6 @@ import {
   ModalTitle,
 } from '#components/common/Modal';
 import { AmountInput } from '#components/util/AmountInput';
-import { ExchangeRateInput } from '#components/util/ExchangeRateInput';
 import { useFormat } from '#hooks/useFormat';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import type { Modal as ModalType } from '#modals/modalsSlice';
@@ -37,10 +35,23 @@ type TransferExchangeRateModalProps = Extract<
   { name: 'transfer-exchange-rate' }
 >['options'];
 
+const readOnlyRateStyle = {
+  width: 130,
+  flexShrink: 0,
+  padding: '5px 8px',
+  borderRadius: 4,
+  backgroundColor: theme.tableBackground,
+  border: `1px solid ${theme.formInputBorder}`,
+  color: theme.pageTextSubdued,
+  textAlign: 'right' as const,
+};
+
 export function TransferExchangeRateModal({
   fromCurrency,
   toCurrency,
+  mainCurrency,
   sourceAmount,
+  counterpartyAmount: initialCounterpartyAmount,
   defaultRate = 1,
   onSubmit,
   onCancel,
@@ -48,74 +59,111 @@ export function TransferExchangeRateModal({
   const { t } = useTranslation();
   const format = useFormat();
   const [hideFraction] = useSyncedPref('hideFraction');
+
+  const initialToAmount =
+    initialCounterpartyAmount ??
+    computeCounterpartyAmount(sourceAmount, defaultRate);
+
+  const [fromLegAmount, setFromLegAmount] =
+    useState<IntegerAmount>(sourceAmount);
+  const [toLegAmount, setToLegAmount] =
+    useState<IntegerAmount>(initialToAmount);
+  const [error, setError] = useState<string | null>(null);
+
+  const involvesMain =
+    mainCurrency !== '' &&
+    (fromCurrency === mainCurrency || toCurrency === mainCurrency);
+  const otherCurrency = involvesMain
+    ? fromCurrency === mainCurrency
+      ? toCurrency
+      : fromCurrency
+    : null;
+
   const formatFrom = format.forCurrency(fromCurrency);
   const formatTo = format.forCurrency(toCurrency);
-
-  const initialCounterpartyAmount = computeCounterpartyAmount(
-    sourceAmount,
-    defaultRate,
-  );
-  const [counterpartyAmount, setCounterpartyAmount] = useState<IntegerAmount>(
-    initialCounterpartyAmount,
-  );
-  const [rate, setRate] = useState(
-    () =>
-      normalizeExchangeRate(
-        computeExchangeRate(sourceAmount, initialCounterpartyAmount) ??
-          defaultRate,
-      ) ?? defaultRate,
-  );
-  const [error, setError] = useState<string | null>(null);
-  const editingFieldRef = useRef<'amount' | 'rate' | null>(null);
+  const formatMain = mainCurrency ? format.forCurrency(mainCurrency) : format;
+  const formatOther = otherCurrency ? format.forCurrency(otherCurrency) : format;
 
   const fromSymbol = getCurrency(fromCurrency).symbol;
   const toSymbol = getCurrency(toCurrency).symbol;
+  const mainSymbol = mainCurrency ? getCurrency(mainCurrency).symbol : '';
+  const otherSymbol = otherCurrency ? getCurrency(otherCurrency).symbol : '';
 
-  const clearError = () => {
+  const defaultLegAmount = useMemo(() => {
+    if (fromCurrency === mainCurrency) {
+      return fromLegAmount;
+    }
+    if (toCurrency === mainCurrency) {
+      return toLegAmount;
+    }
+    return null;
+  }, [fromCurrency, mainCurrency, toCurrency, fromLegAmount, toLegAmount]);
+
+  const otherLegAmount = useMemo(() => {
+    if (fromCurrency === mainCurrency) {
+      return toLegAmount;
+    }
+    if (toCurrency === mainCurrency) {
+      return fromLegAmount;
+    }
+    return null;
+  }, [fromCurrency, mainCurrency, toCurrency, fromLegAmount, toLegAmount]);
+
+  const setDefaultLegAmount = (value: IntegerAmount) => {
+    if (fromCurrency === mainCurrency) {
+      setFromLegAmount(value);
+    } else if (toCurrency === mainCurrency) {
+      setToLegAmount(value);
+    }
     if (error) {
       setError(null);
     }
   };
 
-  const onCounterpartyAmountUpdate = (value: IntegerAmount) => {
-    setCounterpartyAmount(value);
-    if (editingFieldRef.current === 'amount') {
-      const nextRate = computeExchangeRate(sourceAmount, value);
-      if (nextRate != null) {
-        const normalized = normalizeExchangeRate(nextRate);
-        if (normalized != null) {
-          setRate(normalized);
-        }
-      }
+  const setOtherLegAmount = (value: IntegerAmount) => {
+    if (fromCurrency === mainCurrency) {
+      setToLegAmount(value);
+    } else if (toCurrency === mainCurrency) {
+      setFromLegAmount(value);
     }
-    clearError();
+    if (error) {
+      setError(null);
+    }
   };
 
-  const onRateUpdate = (value: number) => {
-    setRate(value);
-    if (editingFieldRef.current === 'rate') {
-      setCounterpartyAmount(computeCounterpartyAmount(sourceAmount, value));
-    }
-    clearError();
-  };
+  const rateFromTo = computeExchangeRate(fromLegAmount, toLegAmount);
+  const rateToFrom = computeExchangeRate(toLegAmount, fromLegAmount);
+
+  const otherToDefault =
+    involvesMain && otherLegAmount != null && defaultLegAmount != null
+      ? computeExchangeRate(otherLegAmount, defaultLegAmount)
+      : null;
+  const defaultToOther =
+    involvesMain && defaultLegAmount != null && otherLegAmount != null
+      ? computeExchangeRate(defaultLegAmount, otherLegAmount)
+      : null;
 
   const trySubmit = (): boolean => {
-    if (!counterpartyAmount) {
-      setError(t('Enter the amount in the destination account currency'));
+    if (!fromLegAmount || !toLegAmount) {
+      setError(t('Enter amounts in both account currencies'));
       return false;
     }
-    if (Math.sign(counterpartyAmount) === Math.sign(sourceAmount)) {
+    if (Math.sign(fromLegAmount) === Math.sign(toLegAmount)) {
       setError(
-        t('Transfer amount must have the opposite sign of the source amount'),
+        t('Transfer amounts must have opposite signs in each account'),
       );
       return false;
     }
-    if (rate <= 0) {
+    if (rateFromTo == null || rateFromTo <= 0) {
       setError(t('Exchange rate must be a positive number'));
       return false;
     }
 
-    onSubmit(rate);
+    onSubmit({
+      exchangeRate: rateFromTo,
+      fromAmount: fromLegAmount,
+      toAmount: toLegAmount,
+    });
     return true;
   };
 
@@ -146,8 +194,8 @@ export function TransferExchangeRateModal({
           >
             <Text style={{ marginBottom: 16, color: theme.pageTextSubdued }}>
               <Trans>
-                Enter the exchange rate so both accounts reflect the correct
-                transfer amount.
+                Enter the transfer amounts in each account currency. Exchange
+                rates are calculated automatically.
               </Trans>
             </Text>
 
@@ -176,14 +224,22 @@ export function TransferExchangeRateModal({
                       marginBottom: 4,
                     }}
                   >
-                    <Trans>Source amount</Trans>
+                    {involvesMain ? (
+                      <Trans>Other currency amount</Trans>
+                    ) : (
+                      <Trans>From account amount</Trans>
+                    )}
                   </Text>
                   <FinancialText style={{ fontWeight: 600 }}>
-                    {formatFrom(sourceAmount, 'financial')}
+                    {involvesMain
+                      ? formatOther(otherLegAmount ?? 0, 'financial')
+                      : formatFrom(fromLegAmount, 'financial')}
                   </FinancialText>
                   <Text style={{ fontSize: 12, color: theme.pageTextSubdued }}>
-                    {fromCurrency}
-                    {fromSymbol ? ` (${fromSymbol})` : ''}
+                    {involvesMain ? otherCurrency : fromCurrency}
+                    {(involvesMain ? otherSymbol : fromSymbol)
+                      ? ` (${involvesMain ? otherSymbol : fromSymbol})`
+                      : ''}
                   </Text>
                 </View>
 
@@ -194,7 +250,7 @@ export function TransferExchangeRateModal({
                     flexShrink: 0,
                   }}
                 >
-                  →
+                  ↔
                 </Text>
 
                 <View style={{ flex: 1, minWidth: 0, alignItems: 'flex-end' }}>
@@ -205,94 +261,232 @@ export function TransferExchangeRateModal({
                       marginBottom: 4,
                     }}
                   >
-                    <Trans>Destination amount</Trans>
+                    {involvesMain ? (
+                      <Trans>Default currency amount</Trans>
+                    ) : (
+                      <Trans>To account amount</Trans>
+                    )}
                   </Text>
                   <FinancialText style={{ fontWeight: 600 }}>
-                    {formatTo(counterpartyAmount, 'financial')}
+                    {involvesMain
+                      ? formatMain(defaultLegAmount ?? 0, 'financial')
+                      : formatTo(toLegAmount, 'financial')}
                   </FinancialText>
                   <Text style={{ fontSize: 12, color: theme.pageTextSubdued }}>
-                    {toCurrency}
-                    {toSymbol ? ` (${toSymbol})` : ''}
+                    {involvesMain ? mainCurrency : toCurrency}
+                    {(involvesMain ? mainSymbol : toSymbol)
+                      ? ` (${involvesMain ? mainSymbol : toSymbol})`
+                      : ''}
                   </Text>
                 </View>
               </View>
 
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: theme.pageTextSubdued,
-                  textAlign: 'center',
-                }}
-              >
-                <Trans>
-                  1 {{ fromCurrency }} = {{ rate: formatExchangeRate(rate) }}{' '}
-                  {{ toCurrency }}
-                </Trans>
-              </Text>
+              {involvesMain && otherCurrency && (
+                <>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: theme.pageTextSubdued,
+                      textAlign: 'center',
+                    }}
+                  >
+                    <Trans>
+                      1 {{ otherCurrency }} ={' '}
+                      {{ rate: formatExchangeRate(otherToDefault) }}{' '}
+                      {{ mainCurrency }}
+                    </Trans>
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: theme.pageTextSubdued,
+                      textAlign: 'center',
+                    }}
+                  >
+                    <Trans>
+                      1 {{ mainCurrency }} ={' '}
+                      {{ rate: formatExchangeRate(defaultToOther) }}{' '}
+                      {{ otherCurrency }}
+                    </Trans>
+                  </Text>
+                </>
+              )}
+
+              {!involvesMain && (
+                <>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: theme.pageTextSubdued,
+                      textAlign: 'center',
+                    }}
+                  >
+                    <Trans>
+                      1 {{ fromCurrency }} ={' '}
+                      {{ rate: formatExchangeRate(rateFromTo) }} {{ toCurrency }}
+                    </Trans>
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: theme.pageTextSubdued,
+                      textAlign: 'center',
+                    }}
+                  >
+                    <Trans>
+                      1 {{ toCurrency }} ={' '}
+                      {{ rate: formatExchangeRate(rateToFrom) }} {{ fromCurrency }}
+                    </Trans>
+                  </Text>
+                </>
+              )}
             </View>
 
-            <InlineField
-              label={t('Amount in {{currency}}', { currency: toCurrency })}
-              labelWidth={220}
-              width="100%"
-            >
-              <View style={{ width: 130, flexShrink: 0 }}>
-                <InitialFocus>
-                  <AmountInput
-                    value={counterpartyAmount}
-                    autoDecimals={String(hideFraction) !== 'true'}
-                    updateOnInput
-                    onFocus={() => {
-                      editingFieldRef.current = 'amount';
-                    }}
-                    onBlur={() => {
-                      if (editingFieldRef.current === 'amount') {
-                        editingFieldRef.current = null;
-                      }
-                    }}
-                    onUpdate={onCounterpartyAmountUpdate}
-                    style={{ width: '100%' }}
-                  />
-                </InitialFocus>
-              </View>
-            </InlineField>
+            {involvesMain && otherCurrency ? (
+              <>
+                <InlineField
+                  label={t('Amount in {{currency}}', {
+                    currency: otherCurrency,
+                  })}
+                  labelWidth={220}
+                  width="100%"
+                >
+                  <View style={{ width: 130, flexShrink: 0 }}>
+                    <InitialFocus>
+                      <AmountInput
+                        value={otherLegAmount ?? 0}
+                        autoDecimals={String(hideFraction) !== 'true'}
+                        updateOnInput
+                        onUpdate={setOtherLegAmount}
+                        style={{ width: '100%' }}
+                      />
+                    </InitialFocus>
+                  </View>
+                </InlineField>
 
-            <InlineField
-              label={t('Exchange rate ({{from}} to {{to}})', {
-                from: fromCurrency,
-                to: toCurrency,
-              })}
-              labelWidth={220}
-              width="100%"
-              style={{ marginTop: 16 }}
-            >
-              <ExchangeRateInput
-                value={rate}
-                updateOnInput
-                onFocus={() => {
-                  editingFieldRef.current = 'rate';
-                }}
-                onBlur={() => {
-                  if (editingFieldRef.current === 'rate') {
-                    editingFieldRef.current = null;
-                  }
-                }}
-                onUpdate={onRateUpdate}
-                style={{ width: 130, flexShrink: 0 }}
-              />
-            </InlineField>
+                <InlineField
+                  label={t('Amount in {{currency}}', {
+                    currency: mainCurrency,
+                  })}
+                  labelWidth={220}
+                  width="100%"
+                  style={{ marginTop: 16 }}
+                >
+                  <View style={{ width: 130, flexShrink: 0 }}>
+                    <AmountInput
+                      value={defaultLegAmount ?? 0}
+                      autoDecimals={String(hideFraction) !== 'true'}
+                      updateOnInput
+                      onUpdate={setDefaultLegAmount}
+                      style={{ width: '100%' }}
+                    />
+                  </View>
+                </InlineField>
 
-            <Text
-              style={{
-                marginTop: 12,
-                color: theme.pageTextSubdued,
-                fontSize: 13,
-              }}
-            >
-              <Trans>
-                Edit either field — the other updates automatically.
-              </Trans>
-            </Text>
+                <InlineField
+                  label={t('Exchange rate ({{from}} to {{to}})', {
+                    from: otherCurrency,
+                    to: mainCurrency,
+                  })}
+                  labelWidth={220}
+                  width="100%"
+                  style={{ marginTop: 16 }}
+                >
+                  <Text style={readOnlyRateStyle}>
+                    {formatExchangeRate(otherToDefault)}
+                  </Text>
+                </InlineField>
+
+                <InlineField
+                  label={t('Exchange rate ({{from}} to {{to}})', {
+                    from: mainCurrency,
+                    to: otherCurrency,
+                  })}
+                  labelWidth={220}
+                  width="100%"
+                  style={{ marginTop: 16 }}
+                >
+                  <Text style={readOnlyRateStyle}>
+                    {formatExchangeRate(defaultToOther)}
+                  </Text>
+                </InlineField>
+              </>
+            ) : (
+              <>
+                <InlineField
+                  label={t('Amount in {{currency}}', { currency: fromCurrency })}
+                  labelWidth={220}
+                  width="100%"
+                >
+                  <View style={{ width: 130, flexShrink: 0 }}>
+                    <InitialFocus>
+                      <AmountInput
+                        value={fromLegAmount}
+                        autoDecimals={String(hideFraction) !== 'true'}
+                        updateOnInput
+                        onUpdate={value => {
+                          setFromLegAmount(value);
+                          if (error) {
+                            setError(null);
+                          }
+                        }}
+                        style={{ width: '100%' }}
+                      />
+                    </InitialFocus>
+                  </View>
+                </InlineField>
+
+                <InlineField
+                  label={t('Amount in {{currency}}', { currency: toCurrency })}
+                  labelWidth={220}
+                  width="100%"
+                  style={{ marginTop: 16 }}
+                >
+                  <View style={{ width: 130, flexShrink: 0 }}>
+                    <AmountInput
+                      value={toLegAmount}
+                      autoDecimals={String(hideFraction) !== 'true'}
+                      updateOnInput
+                      onUpdate={value => {
+                        setToLegAmount(value);
+                        if (error) {
+                          setError(null);
+                        }
+                      }}
+                      style={{ width: '100%' }}
+                    />
+                  </View>
+                </InlineField>
+
+                <InlineField
+                  label={t('Exchange rate ({{from}} to {{to}})', {
+                    from: fromCurrency,
+                    to: toCurrency,
+                  })}
+                  labelWidth={220}
+                  width="100%"
+                  style={{ marginTop: 16 }}
+                >
+                  <Text style={readOnlyRateStyle}>
+                    {formatExchangeRate(rateFromTo)}
+                  </Text>
+                </InlineField>
+
+                <InlineField
+                  label={t('Exchange rate ({{from}} to {{to}})', {
+                    from: toCurrency,
+                    to: fromCurrency,
+                  })}
+                  labelWidth={220}
+                  width="100%"
+                  style={{ marginTop: 16 }}
+                >
+                  <Text style={readOnlyRateStyle}>
+                    {formatExchangeRate(rateToFrom)}
+                  </Text>
+                </InlineField>
+              </>
+            )}
 
             {error && <FormError style={{ marginTop: 12 }}>{error}</FormError>}
 

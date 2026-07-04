@@ -84,6 +84,24 @@ export function computeExchangeRate(
   return normalizeExchangeRate(rate);
 }
 
+/** Exchange rate from one transfer leg's currency to the counterparty's. */
+export function getTransferExchangeRateForLeg(
+  legAmount: number,
+  counterpartyAmount: number,
+): number | null {
+  return computeExchangeRate(legAmount, counterpartyAmount);
+}
+
+/** Canonical outflow → inflow rate stored on both transfer legs. */
+export function getCanonicalTransferExchangeRate(
+  amountA: number,
+  amountB: number,
+): number | null {
+  const outflow = amountA < 0 ? amountA : amountB;
+  const inflow = amountA < 0 ? amountB : amountA;
+  return computeExchangeRate(outflow, inflow);
+}
+
 export function isForeignCurrencyAccount(
   account: Pick<AccountEntity, 'currency'> | null | undefined,
   mainCurrencyCode = '',
