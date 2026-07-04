@@ -8,6 +8,7 @@ import {
   convertRatesFromBaseConversion,
   getAccountCurrency,
   getBudgetAmountForTransferLeg,
+  getTransferExchangeRate,
   getAllowedAccountCurrencies,
   canEditTransactionBudgetAmount,
   isForeignCurrencyAccount,
@@ -125,6 +126,29 @@ describe('currency-transfer', () => {
         { EUR: 1.08 },
       ),
     ).toBe(false);
+  });
+
+  it('derives transfer exchange rates from configured rates to main', () => {
+    const rates = { EUR: 1.08, GBP: 1.27 };
+
+    // Same currency — no rate needed
+    expect(getTransferExchangeRate('USD', 'USD', 'USD', rates)).toBeNull();
+    expect(getTransferExchangeRate('EUR', 'EUR', 'USD', rates)).toBeNull();
+
+    // Main → foreign
+    expect(getTransferExchangeRate('USD', 'EUR', 'USD', rates)).toBe(0.9259);
+
+    // Foreign → main
+    expect(getTransferExchangeRate('EUR', 'USD', 'USD', rates)).toBe(1.08);
+
+    // Foreign → different foreign (triangulate through main)
+    expect(getTransferExchangeRate('EUR', 'GBP', 'USD', rates)).toBe(0.8504);
+    expect(getTransferExchangeRate('GBP', 'EUR', 'USD', rates)).toBe(1.1761);
+  });
+
+  it('returns null when configured rates are missing', () => {
+    expect(getTransferExchangeRate('EUR', 'USD', 'USD', {})).toBeNull();
+    expect(getTransferExchangeRate('EUR', 'GBP', 'USD', { EUR: 1.08 })).toBeNull();
   });
 
   it('parses and serializes exchange rates', () => {

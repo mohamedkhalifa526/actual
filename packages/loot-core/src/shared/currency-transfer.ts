@@ -258,6 +258,49 @@ export function getExchangeRateToMain(
   return rate != null && rate > 0 ? rate : null;
 }
 
+/**
+ * Derive a transfer exchange rate (destination units per source unit) from
+ * configured "1 quote = Y main" rates in settings.
+ *
+ * - Main → foreign: inverse of the foreign rate to main
+ * - Foreign → main: foreign rate to main
+ * - Foreign → foreign: triangulate through main (fromRate / toRate)
+ */
+export function getTransferExchangeRate(
+  fromCurrency: string,
+  toCurrency: string,
+  mainCurrencyCode: string,
+  rates: CurrencyExchangeRates,
+): number | null {
+  const from = fromCurrency.trim();
+  const to = toCurrency.trim();
+  const main = mainCurrencyCode.trim();
+
+  if (!from || !to || from === to) {
+    return null;
+  }
+
+  if (from === main) {
+    const toRate = getExchangeRateToMain(to, main, rates);
+    if (toRate == null) {
+      return null;
+    }
+    return normalizeExchangeRate(1 / toRate);
+  }
+
+  if (to === main) {
+    return getExchangeRateToMain(from, main, rates);
+  }
+
+  const fromRate = getExchangeRateToMain(from, main, rates);
+  const toRate = getExchangeRateToMain(to, main, rates);
+  if (fromRate == null || toRate == null) {
+    return null;
+  }
+
+  return normalizeExchangeRate(fromRate / toRate);
+}
+
 export function getAllowedAccountCurrencies(
   mainCurrencyCode: string,
   rates: CurrencyExchangeRates,

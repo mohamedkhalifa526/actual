@@ -598,6 +598,7 @@ export function TransactionList({
           accounts,
           payees,
           defaultCurrencyCode: defaultCurrencyCode || '',
+          exchangeRates,
           allTransactions,
         });
         for (const updated of updates) {
@@ -607,7 +608,7 @@ export function TransactionList({
         // User cancelled the modal.
       }
     },
-    [accounts, defaultCurrencyCode, dispatch, payees, persistTransaction],
+    [accounts, defaultCurrencyCode, dispatch, exchangeRates, payees, persistTransaction],
   );
 
   const onAddSplit = useCallback(

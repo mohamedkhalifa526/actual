@@ -1,10 +1,12 @@
 import {
   getAccountCurrency,
+  getTransferExchangeRate,
   isCrossCurrencyTransfer,
   computeCounterpartyAmount,
   computeExchangeRate,
   normalizeExchangeRate,
 } from '@actual-app/core/shared/currency-transfer';
+import type { CurrencyExchangeRates } from '@actual-app/core/shared/currency-transfer';
 import type {
   AccountEntity,
   PayeeEntity,
@@ -99,11 +101,13 @@ export async function withTransferExchangeRate(
     accounts,
     payees,
     defaultCurrencyCode,
+    exchangeRates = {},
   }: {
     dispatch: AppDispatch;
     accounts: AccountEntity[];
     payees: PayeeEntity[];
     defaultCurrencyCode: string;
+    exchangeRates?: CurrencyExchangeRates;
   },
 ): Promise<TransactionEntity> {
   const transferAccountId = getTransferAccountId(transaction.payee, payees);
@@ -121,6 +125,23 @@ export async function withTransferExchangeRate(
     return transaction;
   }
 
+  const mainCurrency = defaultCurrencyCode.trim();
+  const fromCurrency = getAccountCurrency(fromAccount, mainCurrency);
+  const toCurrency = getAccountCurrency(toAccount, mainCurrency);
+  const configuredRate = getTransferExchangeRate(
+    fromCurrency,
+    toCurrency,
+    mainCurrency,
+    exchangeRates,
+  );
+
+  if (configuredRate != null) {
+    return {
+      ...transaction,
+      exchange_rate: configuredRate,
+    };
+  }
+
   try {
     const exchangeRate = await promptTransferExchangeRate({
       dispatch,
@@ -128,6 +149,7 @@ export async function withTransferExchangeRate(
       toAccount,
       defaultCurrencyCode,
       sourceAmount: transaction.amount,
+      defaultRate: configuredRate ?? 1,
     });
 
     return {
@@ -146,12 +168,14 @@ export async function editTransferExchangeRate(
     accounts,
     payees,
     defaultCurrencyCode,
+    exchangeRates = {},
     allTransactions,
   }: {
     dispatch: AppDispatch;
     accounts: AccountEntity[];
     payees: PayeeEntity[];
     defaultCurrencyCode: string;
+    exchangeRates?: CurrencyExchangeRates;
     allTransactions: TransactionEntity[];
   },
 ): Promise<TransactionEntity[]> {
@@ -167,6 +191,16 @@ export async function editTransferExchangeRate(
     return [transaction];
   }
 
+  const mainCurrency = defaultCurrencyCode.trim();
+  const fromCurrency = getAccountCurrency(fromAccount, mainCurrency);
+  const toCurrency = getAccountCurrency(toAccount, mainCurrency);
+  const configuredRate = getTransferExchangeRate(
+    fromCurrency,
+    toCurrency,
+    mainCurrency,
+    exchangeRates,
+  );
+
   const counterparty = transaction.transfer_id
     ? allTransactions.find(t => t.id === transaction.transfer_id)
     : allTransactions.find(t => t.transfer_id === transaction.id);
@@ -176,6 +210,7 @@ export async function editTransferExchangeRate(
     (counterparty
       ? computeExchangeRate(transaction.amount, counterparty.amount)
       : null) ??
+    configuredRate ??
     1;
 
   const exchangeRate = await promptTransferExchangeRate({
