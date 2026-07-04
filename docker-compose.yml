@@ -14,4 +14,11 @@ services:
       - '3001:3001'
     volumes:
       - '.:/app'
+      # Use a Linux-specific node_modules inside the container. Without this,
+      # a host install on Windows/macOS breaks optional native deps like
+      # @rolldown/binding-linux-x64-gnu.
+      - 'actual-node-modules:/app/node_modules'
     restart: 'no'
+
+volumes:
+  actual-node-modules:

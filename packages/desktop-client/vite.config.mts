@@ -177,10 +177,11 @@ const stagePublicDataOnChange = (): Plugin => ({
 const lootCoreBackend = (): Plugin => ({
   name: 'loot-core-backend',
   configureServer(server) {
+    const viteBin = path.resolve(__dirname, '../../node_modules/vite/bin/vite.js');
     const child: ChildProcess = spawn(
-      'yarn',
+      process.execPath,
       [
-        'vite',
+        viteBin,
         'build',
         '--config',
         lootCoreConfig,

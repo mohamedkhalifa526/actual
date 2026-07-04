@@ -6,7 +6,18 @@
 # if so, run yarn to install the dependencies.
 #####################################################
 
-if [ ! -d "node_modules" ] || [ "$(ls -A node_modules)" = "" ]; then
+needs_install=false
+
+if [ ! -d "node_modules" ] || [ "$(ls -A node_modules 2>/dev/null)" = "" ]; then
+    needs_install=true
+fi
+
+# Host-mounted node_modules from another OS won't include Linux native bindings.
+if [ "$(uname -s)" = "Linux" ] && [ ! -d "node_modules/@rolldown/binding-linux-x64-gnu" ]; then
+    needs_install=true
+fi
+
+if [ "$needs_install" = true ]; then
     yarn
 fi
 
