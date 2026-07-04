@@ -580,6 +580,7 @@ export function AccountHeader({
         <ReconcilingMessage
           targetBalance={reconcileAmount}
           balanceQuery={balanceQuery}
+          account={account}
           onDone={onDoneReconciling}
           onCreateTransaction={onCreateReconciliationTransaction}
         />

@@ -18,7 +18,8 @@ import { FinancialText } from '#components/FinancialText';
 import { PrivacyFilter } from '#components/PrivacyFilter';
 import { CellValue, CellValueText } from '#components/spreadsheet/CellValue';
 import { useCachedSchedules } from '#hooks/useCachedSchedules';
-import { useFormat } from '#hooks/useFormat';
+import { useFormatForAccount } from '#hooks/useFormatForAccount';
+import type { FormatType } from '#hooks/useFormat';
 import { useSelectedItems } from '#hooks/useSelected';
 import { useSheetValue } from '#hooks/useSheetValue';
 import type { Binding } from '#spreadsheet';
@@ -27,14 +28,15 @@ type DetailedBalanceProps = {
   name: string;
   balance: number;
   isExactBalance?: boolean;
+  formatFinancial: (value: unknown, type?: FormatType) => string;
 };
 
 function DetailedBalance({
   name,
   balance,
   isExactBalance = true,
+  formatFinancial,
 }: DetailedBalanceProps) {
-  const format = useFormat();
   return (
     <Text
       style={{
@@ -48,7 +50,7 @@ function DetailedBalance({
       <PrivacyFilter>
         <FinancialText style={{ fontWeight: 600 }}>
           {!isExactBalance && '~ '}
-          {format(balance, 'financial')}
+          {formatFinancial(balance, 'financial')}
         </FinancialText>
       </PrivacyFilter>
     </Text>
@@ -65,6 +67,7 @@ export function SelectedBalance({
   account,
 }: SelectedBalanceProps) {
   const { t } = useTranslation();
+  const { formatFinancial } = useFormatForAccount(account);
 
   const name = `selected-balance-${[...selectedItems].join('-')}`;
 
@@ -127,15 +130,20 @@ export function SelectedBalance({
       name={t('Selected balance:')}
       balance={balance}
       isExactBalance={isExactBalance}
+      formatFinancial={formatFinancial}
     />
   );
 }
 
 type FilteredBalanceProps = {
   filteredAmount?: number | null;
+  formatFinancial: (value: unknown, type?: FormatType) => string;
 };
 
-function FilteredBalance({ filteredAmount }: FilteredBalanceProps) {
+function FilteredBalance({
+  filteredAmount,
+  formatFinancial,
+}: FilteredBalanceProps) {
   const { t } = useTranslation();
 
   return (
@@ -143,15 +151,17 @@ function FilteredBalance({ filteredAmount }: FilteredBalanceProps) {
       name={t('Filtered balance:')}
       balance={filteredAmount ?? 0}
       isExactBalance
+      formatFinancial={formatFinancial}
     />
   );
 }
 
 type MoreBalancesProps = {
   balanceQuery: { name: `balance-query-${string}`; query: Query };
+  formatFinancial: (value: unknown, type?: FormatType) => string;
 };
 
-function MoreBalances({ balanceQuery }: MoreBalancesProps) {
+function MoreBalances({ balanceQuery, formatFinancial }: MoreBalancesProps) {
   const { t } = useTranslation();
 
   const cleared = useSheetValue<'balance', `balance-query-${string}-cleared`>({
@@ -169,8 +179,16 @@ function MoreBalances({ balanceQuery }: MoreBalancesProps) {
 
   return (
     <>
-      <DetailedBalance name={t('Cleared total:')} balance={cleared ?? 0} />
-      <DetailedBalance name={t('Uncleared total:')} balance={uncleared ?? 0} />
+      <DetailedBalance
+        name={t('Cleared total:')}
+        balance={cleared ?? 0}
+        formatFinancial={formatFinancial}
+      />
+      <DetailedBalance
+        name={t('Uncleared total:')}
+        balance={uncleared ?? 0}
+        formatFinancial={formatFinancial}
+      />
     </>
   );
 }
@@ -195,6 +213,7 @@ export function Balances({
   const selectedItems = useSelectedItems();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const isButtonHovered = useHover(buttonRef as RefObject<HTMLButtonElement>);
+  const { formatter, formatFinancial } = useFormatForAccount(account);
 
   return (
     <View
@@ -229,6 +248,7 @@ export function Balances({
           {props => (
             <CellValueText
               {...props}
+              formatter={formatter}
               style={{
                 fontSize: 22,
                 fontWeight: 400,
@@ -258,12 +278,22 @@ export function Balances({
         />
       </Button>
 
-      {showExtraBalances && <MoreBalances balanceQuery={balanceQuery} />}
+      {showExtraBalances && (
+        <MoreBalances
+          balanceQuery={balanceQuery}
+          formatFinancial={formatFinancial}
+        />
+      )}
 
       {selectedItems.size > 0 && (
         <SelectedBalance selectedItems={selectedItems} account={account} />
       )}
-      {isFiltered && <FilteredBalance filteredAmount={filteredAmount} />}
+      {isFiltered && (
+        <FilteredBalance
+          filteredAmount={filteredAmount}
+          formatFinancial={formatFinancial}
+        />
+      )}
     </View>
   );
 }

@@ -7,7 +7,12 @@ import { styles } from '@actual-app/components/styles';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import type { IntegerAmount } from '@actual-app/core/shared/util';
-import type { TransactionEntity } from '@actual-app/core/types/models';
+import type {
+  AccountEntity,
+  TransactionEntity,
+} from '@actual-app/core/types/models';
+
+import { useFormatForAccount } from '#hooks/useFormatForAccount';
 
 import { Search } from '#components/common/Search';
 import { PullToRefresh } from '#components/mobile/PullToRefresh';
@@ -61,6 +66,7 @@ function TransactionSearchInput({
 type TransactionListWithBalancesProps = {
   isLoading: boolean;
   transactions: readonly TransactionEntity[];
+  account?: AccountEntity;
   balance:
     | Binding<'account', 'onbudget-accounts-balance'>
     | Binding<'account', 'offbudget-accounts-balance'>
@@ -89,6 +95,7 @@ type TransactionListWithBalancesProps = {
 export function TransactionListWithBalances({
   isLoading,
   transactions,
+  account,
   balance,
   balanceCleared,
   balanceUncleared,
@@ -103,6 +110,7 @@ export function TransactionListWithBalances({
   showMakeTransfer = false,
 }: TransactionListWithBalancesProps) {
   const selectedInst = useSelected('transactions', [...transactions], []);
+  const { formatter } = useFormatForAccount(account);
 
   return (
     <DisplayPayeeProvider transactions={transactions}>
@@ -124,9 +132,10 @@ export function TransactionListWithBalances({
                 balance={balance}
                 balanceCleared={balanceCleared}
                 balanceUncleared={balanceUncleared}
+                formatter={formatter}
               />
             ) : (
-              <Balance balance={balance} />
+              <Balance balance={balance} formatter={formatter} />
             )}
           </View>
           <TransactionSearchInput
@@ -180,12 +189,14 @@ type BalanceWithClearedProps = {
     TransactionListWithBalancesProps['balanceCleared']
   >;
   balance: TransactionListWithBalancesProps['balance'];
+  formatter?: ReturnType<typeof useFormatForAccount>['formatter'];
 };
 
 function BalanceWithCleared({
   balanceUncleared,
   balanceCleared,
   balance,
+  formatter,
 }: BalanceWithClearedProps) {
   const { t } = useTranslation();
   const unclearedAmount = useSheetValue<
@@ -212,6 +223,7 @@ function BalanceWithCleared({
           {props => (
             <CellValueText
               {...props}
+              formatter={formatter}
               style={{
                 fontSize: 12,
                 textAlign: 'center',
@@ -222,7 +234,7 @@ function BalanceWithCleared({
           )}
         </TransactionListBalanceCellValue>
       </View>
-      <Balance balance={balance} />
+      <Balance balance={balance} formatter={formatter} />
       <View
         style={{
           display: !unclearedAmount ? 'none' : undefined,
@@ -240,6 +252,7 @@ function BalanceWithCleared({
           {props => (
             <CellValueText
               {...props}
+              formatter={formatter}
               style={{
                 fontSize: 12,
                 textAlign: 'center',
@@ -256,9 +269,10 @@ function BalanceWithCleared({
 
 type BalanceProps = {
   balance: TransactionListWithBalancesProps['balance'];
+  formatter?: ReturnType<typeof useFormatForAccount>['formatter'];
 };
 
-function Balance({ balance }: BalanceProps) {
+function Balance({ balance, formatter }: BalanceProps) {
   const { t } = useTranslation();
   return (
     <View style={{ flexBasis: '33%' }}>
@@ -267,6 +281,7 @@ function Balance({ balance }: BalanceProps) {
         {props => (
           <CellValueText
             {...props}
+            formatter={formatter}
             style={{
               fontSize: 18,
               textAlign: 'center',

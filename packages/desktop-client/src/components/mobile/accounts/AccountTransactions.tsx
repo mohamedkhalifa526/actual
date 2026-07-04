@@ -216,6 +216,7 @@ function TransactionListWithPreviews({
           : isTransactionsLoading || isPreviewTransactionsLoading
       }
       transactions={transactionsToDisplay}
+      account={account}
       balance={balanceBindings.balance}
       balanceCleared={balanceBindings.cleared}
       balanceUncleared={balanceBindings.uncleared}
